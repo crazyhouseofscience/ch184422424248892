@@ -16,9 +16,12 @@ import {
   LineChart,
   Globe2,
   KeyRound,
-  Download
+  Download,
+  ShieldAlert,
+  RotateCcw
 } from 'lucide-react';
 import { ActiveModule } from '../types';
+import { getExpectedPassword, setCustomPassword, DEFAULT_PASSCODE, revokeAuthorization } from './AccessGateModal';
 
 interface TeacherUnlockModalProps {
   isOpen: boolean;
@@ -50,6 +53,33 @@ export const TeacherUnlockModal: React.FC<TeacherUnlockModalProps> = ({
   const [passcodeInput, setPasscodeInput] = useState('');
   const [passcodeError, setPasscodeError] = useState(false);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+
+  // Classroom Access Gate Management
+  const [currentPasscode, setCurrentPasscode] = useState(() => getExpectedPassword());
+  const [newPasscode, setNewPasscode] = useState('');
+  const [passcodeSavedMsg, setPasscodeSavedMsg] = useState<string | null>(null);
+
+  const handleSaveNewPasscode = () => {
+    if (!newPasscode.trim()) return;
+    setCustomPassword(newPasscode.trim());
+    setCurrentPasscode(newPasscode.trim());
+    setNewPasscode('');
+    setPasscodeSavedMsg('Updated classroom access password successfully!');
+    setTimeout(() => setPasscodeSavedMsg(null), 3000);
+  };
+
+  const handleResetPasscodeDefault = () => {
+    setCustomPassword(DEFAULT_PASSCODE);
+    setCurrentPasscode(DEFAULT_PASSCODE);
+    setNewPasscode('');
+    setPasscodeSavedMsg('Reset password to default: ' + DEFAULT_PASSCODE);
+    setTimeout(() => setPasscodeSavedMsg(null), 3000);
+  };
+
+  const handleTestLockScreen = () => {
+    revokeAuthorization();
+    window.location.reload();
+  };
 
   if (!isOpen) return null;
 
@@ -206,6 +236,77 @@ export const TeacherUnlockModal: React.FC<TeacherUnlockModalProps> = ({
                   </>
                 )}
               </button>
+            </div>
+          </div>
+
+          {/* Classroom Access Gate & Passcode Security */}
+          <div className="p-4 bg-slate-800/80 border border-indigo-500/50 rounded-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-indigo-400" />
+                <span>Classroom Access Password Protection</span>
+              </h3>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-900/80 text-indigo-200 border border-indigo-700/60 font-semibold">
+                ACTIVE
+              </span>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Prevents outsiders from accessing the laboratory without the classroom passcode. Works both online and on offline standalone HTML files.
+            </p>
+
+            {passcodeSavedMsg && (
+              <div className="p-2.5 bg-emerald-950/80 border border-emerald-500/60 rounded-lg text-emerald-200 text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{passcodeSavedMsg}</span>
+              </div>
+            )}
+
+            <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-700/80 space-y-2.5">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
+                <span className="text-slate-400">Current Classroom Password:</span>
+                <span className="px-2.5 py-1 bg-slate-950 text-amber-300 font-mono font-bold rounded-lg border border-slate-700">
+                  {currentPasscode}
+                </span>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                <input
+                  type="text"
+                  value={newPasscode}
+                  onChange={(e) => setNewPasscode(e.target.value)}
+                  placeholder="Set custom password..."
+                  className="flex-1 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-white placeholder-slate-500 text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveNewPasscode}
+                  disabled={!newPasscode.trim()}
+                  className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-semibold text-xs transition cursor-pointer"
+                >
+                  Save Code
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetPasscodeDefault}
+                  title="Reset to PAPS2026"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition cursor-pointer flex items-center gap-1"
+                >
+                  <RotateCcw className="w-3 h-3 text-slate-400" />
+                  <span>Reset Default</span>
+                </button>
+              </div>
+
+              <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+                <span>Want to test the student lock screen?</span>
+                <button
+                  type="button"
+                  onClick={handleTestLockScreen}
+                  className="text-amber-400 hover:underline font-medium cursor-pointer"
+                >
+                  Lock Laboratory & Test Screen
+                </button>
+              </div>
             </div>
           </div>
 

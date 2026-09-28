@@ -35,6 +35,7 @@ interface HeaderProps {
   onOpenTeacherModal?: () => void;
   onOpenDisplayModal?: () => void;
   onOpenDownloadModal?: () => void;
+  onLockApp?: () => void;
   onNextSlide?: () => void;
   onPrevSlide?: () => void;
   currentSlideIndex?: number;
@@ -54,6 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenTeacherModal,
   onOpenDisplayModal,
   onOpenDownloadModal,
+  onLockApp,
   onNextSlide,
   onPrevSlide,
   currentSlideIndex = 0,
@@ -165,8 +167,11 @@ export const Header: React.FC<HeaderProps> = ({
             <div>
               <h1 className="text-sm sm:text-base font-bold tracking-tight text-white flex items-center gap-1.5">
                 <span>Greenhouse Effect & Climate Change Lab</span>
-                <span className="hidden lg:inline text-xs text-amber-400 font-mono font-medium">· Virtual Station Investigation</span>
+                <span className="hidden xl:inline text-xs text-amber-400 font-mono font-medium">· Virtual Station Investigation</span>
               </h1>
+              <div className="text-[10px] text-slate-400 leading-none mt-0.5 hidden sm:block">
+                Designed by <span className="text-slate-300 font-semibold">Keith Chapman 2026 v1.0</span> using Google AI Studio
+              </div>
             </div>
           </div>
 
@@ -266,6 +271,19 @@ export const Header: React.FC<HeaderProps> = ({
               <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
               <span className="hidden sm:inline">Reset</span>
             </button>
+
+            {/* Lock / Security Button */}
+            {onLockApp && (
+              <button
+                id="header-lock-btn"
+                onClick={onLockApp}
+                className="inline-flex items-center gap-1 px-2 py-1.5 rounded-xl text-xs font-medium text-indigo-300 hover:text-white bg-indigo-950/70 hover:bg-indigo-900 border border-indigo-700/60 transition"
+                title="Lock Laboratory (Requires Passcode to re-enter)"
+              >
+                <Lock className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="hidden lg:inline">Lock</span>
+              </button>
+            )}
           </div>
         </div>
 

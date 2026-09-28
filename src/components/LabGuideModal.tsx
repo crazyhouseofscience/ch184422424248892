@@ -27,6 +27,9 @@ export const LabGuideModal: React.FC<LabGuideModalProps> = ({ isOpen, onClose })
         <h3 className="text-xl font-bold text-white">
           Greenhouse Effect & Bottle Atmosphere Investigation
         </h3>
+        <p className="text-xs text-slate-400 mt-1">
+          Designed by Keith Chapman 2026 v1.0 using Google AI Studio
+        </p>
 
         <div className="mt-4 space-y-4 text-xs text-slate-300 leading-relaxed">
           <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60">

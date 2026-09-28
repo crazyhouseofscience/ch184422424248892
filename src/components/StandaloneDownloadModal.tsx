@@ -226,11 +226,17 @@ export const StandaloneDownloadModal: React.FC<StandaloneDownloadModalProps> = (
         </div>
 
         {/* Footer */}
-        <div className="pt-2 border-t border-slate-800 flex justify-between items-center text-xs text-slate-500">
-          <span className="flex items-center gap-1.5">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            Client-Side Safe Delivery
-          </span>
+        <div className="pt-2 border-t border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-2 text-xs text-slate-500">
+          <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2">
+            <span className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              Client-Side Safe Delivery
+            </span>
+            <span className="hidden sm:inline">•</span>
+            <span className="text-slate-400 text-[11px]">
+              Designed by Keith Chapman 2026 v1.0 using Google AI Studio
+            </span>
+          </div>
           <button
             onClick={onClose}
             className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold transition cursor-pointer"

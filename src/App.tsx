@@ -11,6 +11,7 @@ import { LabGuideModal } from './components/LabGuideModal';
 import { TeacherUnlockModal } from './components/TeacherUnlockModal';
 import { DisplaySettingsModal, AppFontSize, AppTheme } from './components/DisplaySettingsModal';
 import { StandaloneDownloadModal } from './components/StandaloneDownloadModal';
+import { AccessGateModal, isAlreadyAuthorized } from './components/AccessGateModal';
 import { Sparkles, CheckCircle2, X, Unlock } from 'lucide-react';
 import { safeLocalStorage, safeSessionStorage } from './utils/storage';
 
@@ -51,6 +52,11 @@ export default function App() {
   const [isTeacherModalOpen, setIsTeacherModalOpen] = useState<boolean>(false);
   const [isDisplayModalOpen, setIsDisplayModalOpen] = useState<boolean>(false);
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState<boolean>(false);
+
+  // Classroom Passcode Protection Gate
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return isAlreadyAuthorized();
+  });
 
   // Display Settings: Theme and Font Size
   const [theme, setTheme] = useState<AppTheme>(() => {
@@ -303,6 +309,10 @@ export default function App() {
         onOpenTeacherModal={() => setIsTeacherModalOpen(true)}
         onOpenDisplayModal={() => setIsDisplayModalOpen(true)}
         onOpenDownloadModal={() => setIsDownloadModalOpen(true)}
+        onLockApp={() => {
+          revokeAuthorization();
+          setIsAuthenticated(false);
+        }}
         onNextSlide={handleNextSlide}
         onPrevSlide={handlePrevSlide}
         currentSlideIndex={currentSlideIndex}
@@ -385,16 +395,18 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-800 bg-slate-950/90 py-2 text-xs text-slate-500 print:hidden shrink-0">
-        <div className="max-w-[1600px] mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-1">
-          <div className="flex items-center space-x-2">
-            <span className="font-semibold text-slate-400">Greenhouse Effect & Climate Change Lab</span>
-            <span>•</span>
-            <span>Virtual Station Investigation & Radiation Modeling</span>
+      <footer className="border-t border-slate-800 bg-slate-950/90 py-2.5 text-xs text-slate-500 print:hidden shrink-0">
+        <div className="max-w-[1600px] mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-2 text-center md:text-left">
+          <div className="flex flex-wrap items-center justify-center md:justify-start gap-x-2 gap-y-1">
+            <span className="font-semibold text-slate-300">Greenhouse Effect & Climate Change Lab</span>
+            <span className="text-slate-600">•</span>
+            <span className="text-slate-400 font-medium">
+              Designed by Keith Chapman 2026 v1.0 using Google AI Studio
+            </span>
           </div>
           <div className="flex items-center space-x-3 text-slate-500 text-xs">
-            <span>IPCC WG1 Physical Basis</span>
-            <span>•</span>
+            <span className="hidden sm:inline">IPCC WG1 Physical Basis</span>
+            <span className="hidden sm:inline text-slate-600">•</span>
             <button
               onClick={() => setIsDisplayModalOpen(true)}
               className="text-indigo-400 hover:underline font-medium"
@@ -438,6 +450,11 @@ export default function App() {
         isOpen={isDownloadModalOpen} 
         onClose={() => setIsDownloadModalOpen(false)} 
       />
+
+      {/* Classroom Access Password Gate Modal */}
+      {!isAuthenticated && (
+        <AccessGateModal onAuthorized={() => setIsAuthenticated(true)} />
+      )}
 
       {/* Teacher Notification Toast */}
       {teacherToast && (

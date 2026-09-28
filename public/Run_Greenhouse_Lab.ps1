@@ -1,3 +1,4 @@
+# Designed by Keith Chapman 2026 v1.0 using Google AI Studio
 # Windows PowerShell 1-Click Server & Launcher
 Set-Location -Path $PSScriptRoot
 
