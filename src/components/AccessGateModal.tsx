@@ -96,7 +96,7 @@ export const AccessGateModal: React.FC<AccessGateModalProps> = ({ onAuthorized }
             Greenhouse Effect & Climate Change Lab
           </p>
           <div className="text-[10px] text-amber-400 font-mono mt-1 font-medium">
-            Designed by Keith Chapman 2026 v1.0
+            Designed by Keith Chapman 2026 v1.1
           </div>
         </div>
 

@@ -308,7 +308,6 @@ export default function App() {
         onToggleTeacherMode={handleToggleTeacherMode}
         onOpenTeacherModal={() => setIsTeacherModalOpen(true)}
         onOpenDisplayModal={() => setIsDisplayModalOpen(true)}
-        onOpenDownloadModal={() => setIsDownloadModalOpen(true)}
         onLockApp={() => {
           revokeAuthorization();
           setIsAuthenticated(false);
@@ -401,7 +400,7 @@ export default function App() {
             <span className="font-semibold text-slate-300">Greenhouse Effect & Climate Change Lab</span>
             <span className="text-slate-600">•</span>
             <span className="text-slate-400 font-medium">
-              Designed by Keith Chapman 2026 v1.0 using Google AI Studio
+              Designed by Keith Chapman 2026 v1.1 using Google AI Studio
             </span>
           </div>
           <div className="flex items-center space-x-3 text-slate-500 text-xs">

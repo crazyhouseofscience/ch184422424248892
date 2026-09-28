@@ -329,24 +329,6 @@ export const TeacherUnlockModal: React.FC<TeacherUnlockModalProps> = ({
                 <Zap className="w-3.5 h-3.5" />
                 <span>Auto-Fill All 3 Stations (0m to 15m Data)</span>
               </button>
-
-              <a
-                href="/Greenhouse_Effect_Lab.exe"
-                download="Greenhouse_Effect_Lab.exe"
-                className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Download Self-Running .EXE</span>
-              </a>
-
-              <a
-                href="/Greenhouse_Effect_Lab_Windows.zip"
-                download="Greenhouse_Effect_Lab_Windows.zip"
-                className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Download Desktop ZIP Package</span>
-              </a>
             </div>
           </div>
 

@@ -234,7 +234,7 @@ export const StandaloneDownloadModal: React.FC<StandaloneDownloadModalProps> = (
             </span>
             <span className="hidden sm:inline">•</span>
             <span className="text-slate-400 text-[11px]">
-              Designed by Keith Chapman 2026 v1.0 using Google AI Studio
+              Designed by Keith Chapman 2026 v1.1 using Google AI Studio
             </span>
           </div>
           <button

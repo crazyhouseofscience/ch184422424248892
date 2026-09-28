@@ -20,8 +20,7 @@ import {
   Palette,
   Type,
   Sun,
-  Moon,
-  Download
+  Moon
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -34,7 +33,6 @@ interface HeaderProps {
   onToggleTeacherMode?: () => void;
   onOpenTeacherModal?: () => void;
   onOpenDisplayModal?: () => void;
-  onOpenDownloadModal?: () => void;
   onLockApp?: () => void;
   onNextSlide?: () => void;
   onPrevSlide?: () => void;
@@ -54,7 +52,6 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleTeacherMode,
   onOpenTeacherModal,
   onOpenDisplayModal,
-  onOpenDownloadModal,
   onLockApp,
   onNextSlide,
   onPrevSlide,
@@ -170,7 +167,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="hidden xl:inline text-xs text-amber-400 font-mono font-medium">· Virtual Station Investigation</span>
               </h1>
               <div className="text-[10px] text-slate-400 leading-none mt-0.5 hidden sm:block">
-                Designed by <span className="text-slate-300 font-semibold">Keith Chapman 2026 v1.0</span> using Google AI Studio
+                Designed by <span className="text-slate-300 font-semibold">Keith Chapman 2026 v1.1</span> using Google AI Studio
               </div>
             </div>
           </div>
@@ -225,17 +222,6 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Quick Actions (Right Zone) */}
           <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
-            {/* Download / Share Offline Button */}
-            <button
-              id="header-download-btn"
-              onClick={onOpenDownloadModal}
-              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold text-emerald-300 hover:text-white bg-emerald-950/80 hover:bg-emerald-900/90 border border-emerald-700/70 transition shadow-sm"
-              title="Download Desktop / Offline Edition (Share & Run with zero blank screens)"
-            >
-              <Download className="w-4 h-4 text-emerald-400" />
-              <span className="hidden sm:inline">Offline & Share</span>
-            </button>
-
             {/* Display / Font Size / Theme Button */}
             <button
               id="header-display-btn"
