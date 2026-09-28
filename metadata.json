@@ -1,0 +1,6 @@
+{
+  "name": "Greenhouse Effect & Climate Change Lab",
+  "description": "Interactive greenhouse effect and global warming lab with heat lamp bottle experiment, CO2 concentration comparison, atmospheric condition simulator, and student data analysis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Greenhouse Effect & Climate Change Lab - Student Investigation Packet & Teacher Guide</title>
+  <style>
+    :root {
+      --primary: #0284c7;
+      --primary-dark: #0369a1;
+      --text: #0f172a;
+      --text-muted: #475569;
+      --border: #cbd5e1;
+      --bg-alt: #f8fafc;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: var(--text);
+      line-height: 1.6;
+      margin: 0;
+      padding: 2rem 1.5rem;
+      background-color: #f1f5f9;
+    }
+    .page {
+      max-width: 860px;
+      margin: 0 auto;
+      background: #ffffff;
+      padding: 3rem 3.5rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+      border: 1px solid var(--border);
+    }
+    .header-banner {
+      border-bottom: 2px solid var(--primary);
+      padding-bottom: 1.25rem;
+      margin-bottom: 2rem;
+    }
+    h1 {
+      font-size: 1.85rem;
+      margin: 0 0 0.5rem 0;
+      color: #0f172a;
+    }
+    .subtitle {
+      font-size: 1rem;
+      color: var(--text-muted);
+      margin: 0;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-top: 1.25rem;
+      font-size: 0.9rem;
+      background: var(--bg-alt);
+      padding: 0.75rem 1rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    h2 {
+      font-size: 1.35rem;
+      color: var(--primary-dark);
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 0.35rem;
+      margin-top: 2rem;
+    }
+    h3 {
+      font-size: 1.1rem;
+      color: #1e293b;
+      margin-top: 1.25rem;
+    }
+    p, li {
+      font-size: 0.95rem;
+      color: #334155;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.25rem 0;
+      font-size: 0.9rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.6rem 0.85rem;
+      text-align: left;
+    }
+    th {
+      background-color: #f1f5f9;
+      font-weight: 600;
+      color: #1e293b;
+    }
+    .data-table th, .data-table td {
+      text-align: center;
+    }
+    .write-box {
+      border: 1px dashed #94a3b8;
+      border-radius: 6px;
+      min-height: 80px;
+      background: #fafafa;
+      margin: 0.75rem 0 1.25rem 0;
+      padding: 0.75rem;
+    }
+    .answer-key {
+      background-color: #f0fdf4;
+      border: 1px solid #86efac;
+      padding: 1.25rem;
+      border-radius: 8px;
+      margin-top: 1.5rem;
+    }
+    .answer-key h3 {
+      color: #166534;
+      margin-top: 0;
+    }
+    .btn-bar {
+      margin-bottom: 1.5rem;
+      text-align: right;
+    }
+    .btn {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.6rem 1.2rem;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    .btn:hover { background: var(--primary-dark); }
+    @media print {
+      body { background: white; padding: 0; }
+      .page { box-shadow: none; border: none; padding: 0; }
+      .btn-bar { display: none; }
+      .page-break { page-break-before: always; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="btn-bar">
+      <button class="btn" onclick="window.print()">🖨️ Print or Save as PDF</button>
+    </div>
+
+    <div class="header-banner">
+      <h1>Greenhouse Effect & Climate Change Lab</h1>
+      <p class="subtitle">Virtual Station Investigation · Controlled Thermal Radiation & Carbon Dioxide Absorption</p>
+      
+      <div class="meta-grid">
+        <div><strong>Student Name:</strong> ______________________</div>
+        <div><strong>Class / Period:</strong> ______________________</div>
+        <div><strong>Date:</strong> ______________________</div>
+      </div>
+    </div>
+
+    <h2>1. Investigation Overview & Driving Question</h2>
+    <p>
+      <strong>Driving Question:</strong> <em>How does increasing the concentration of carbon dioxide (CO₂) in an enclosed atmosphere affect the absorption of infrared thermal radiation and the rate of temperature increase over time?</em>
+    </p>
+    <p>
+      In this investigation, you will compare three identical atmospheric chambers exposed to equal incandescent thermal radiation (100W heat lamp at 12 inches, clamped at 4 inches elevation):
+    </p>
+    <ul>
+      <li><strong>Station 1 (Control):</strong> Ambient Air (~420 ppm CO₂) · 0 Effervescent Tablets</li>
+      <li><strong>Station 2 (Medium CO₂):</strong> Elevated CO₂ (~1,500 ppm CO₂) · 2 Effervescent Tablets</li>
+      <li><strong>Station 3 (High CO₂):</strong> Enriched CO₂ (~3,200 ppm CO₂) · 4 Effervescent Tablets</li>
+    </ul>
+
+    <h2>2. Pre-Lab Hypothesis</h2>
+    <p>State your prediction before running the experiment (If... then... because...):</p>
+    <div class="write-box">
+      <em>Example: If the concentration of CO₂ inside the bottle increases, then the maximum temperature reached after 15 minutes will be higher, because CO₂ molecules absorb outgoing infrared radiation...</em>
+    </div>
+
+    <h2>3. Materials & Controlled Apparatus</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Apparatus / Variable</th>
+          <th>Specification</th>
+          <th>Control Role</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Incandescent Lamp</td>
+          <td>100W Reflector Bulb, 120V</td>
+          <td>Simulates uniform solar & thermal radiation source</td>
+        </tr>
+        <tr>
+          <td>Lamp Distance & Height</td>
+          <td>12 inches distance, 4 inches height</td>
+          <td>Controlled Variable (Identical across all stations)</td>
+        </tr>
+        <tr>
+          <td>Plastic Bottle Chamber</td>
+          <td>500 mL Transparent PET Bottle</td>
+          <td>Controlled chamber volume & light transmission</td>
+        </tr>
+        <tr>
+          <td>Water Reservoir</td>
+          <td>100 mL Deionized Water</td>
+          <td>Solvent for sodium bicarbonate effervescence</td>
+        </tr>
+        <tr>
+          <td>Effervescent Tablets</td>
+          <td>0, 2, or 4 Tablets (Alka-Seltzer)</td>
+          <td><strong>Independent Variable</strong> (CO₂ concentration generator)</td>
+        </tr>
+        <tr>
+          <td>Internal Temperature</td>
+          <td>Digital Sensor probe in air headspace</td>
+          <td><strong>Dependent Variable</strong> (Measured in °C every 3 min)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="page-break"></div>
+
+    <h2>4. Experimental Data Recording Sheet</h2>
+    <p>Record temperature values in °C at each 3-minute interval for all 3 stations:</p>
+
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Time (min)</th>
+          <th>Station 1 (0 Tablets · Control)<br>Temp (°C)</th>
+          <th>Station 2 (2 Tablets · Medium CO₂)<br>Temp (°C)</th>
+          <th>Station 3 (4 Tablets · High CO₂)<br>Temp (°C)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>0 min</strong> (Baseline)</td>
+          <td>21.0 °C</td>
+          <td>21.0 °C</td>
+          <td>21.0 °C</td>
+        </tr>
+        <tr>
+          <td><strong>3 min</strong></td>
+          <td>________ °C</td>
+          <td>________ °C</td>
+          <td>________ °C</td>
+        </tr>
+        <tr>
+          <td><strong>6 min</strong></td>
+          <td>________ °C</td>
+          <td>________ °C</td>
+          <td>________ °C</td>
+        </tr>
+        <tr>
+          <td><strong>9 min</strong></td>
+          <td>________ °C</td>
+          <td>________ °C</td>
+          <td>________ °C</td>
+        </tr>
+        <tr>
+          <td><strong>12 min</strong></td>
+          <td>________ °C</td>
+          <td>________ °C</td>
+          <td>________ °C</td>
+        </tr>
+        <tr>
+          <td><strong>15 min</strong> (Final)</td>
+          <td>________ °C</td>
+          <td>________ °C</td>
+          <td>________ °C</td>
+        </tr>
+        <tr style="background:#f8fafc; font-weight:bold;">
+          <td>Total Change (ΔT)</td>
+          <td>ΔT = _______ °C</td>
+          <td>ΔT = _______ °C</td>
+          <td>ΔT = _______ °C</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>5. Post-Lab Analysis & Inquiry Questions</h2>
+
+    <p><strong>Question 1:</strong> Compare the total temperature change (ΔT = Final - Initial) for each bottle. What relationship do you observe between tablet count (CO₂ concentration) and temperature rise?</p>
+    <div class="write-box"></div>
+
+    <p><strong>Question 2:</strong> Why was it essential to keep the lamp distance (12 inches), lamp height (4 inches), water volume (100 mL), and bottle size identical across all stations?</p>
+    <div class="write-box"></div>
+
+    <p><strong>Question 3 (Radiative Physics):</strong> Both light and infrared heat travel from the lamp into the bottles. Why does the bottle with higher CO₂ retain more heat energy than ambient air?</p>
+    <div class="write-box"></div>
+
+    <p><strong>Question 4 (Real-World Planetary Application):</strong> Earth's natural greenhouse effect warms our planet by approximately 33°C (without it, Earth would be a frozen -18°C). How does this experiment demonstrate the impact of human fossil fuel emissions on planetary energy balance?</p>
+    <div class="write-box"></div>
+
+    <div class="page-break"></div>
+
+    <div class="answer-key">
+      <h3>Teacher Facilitator & Answer Key Reference</h3>
+      <p><strong>Benchmark Values (15-Minute Data Curve):</strong></p>
+      <ul>
+        <li><strong>Station 1 (0 Tablets · Ambient ~420 ppm):</strong> 0m: 21.0°C → 3m: 21.6°C → 6m: 22.2°C → 9m: 22.7°C → 12m: 23.1°C → <strong>15m: 23.5°C (ΔT = +2.5°C)</strong></li>
+        <li><strong>Station 2 (2 Tablets · Medium ~1,500 ppm):</strong> 0m: 21.0°C → 3m: 22.1°C → 6m: 23.3°C → 9m: 24.3°C → 12m: 25.2°C → <strong>15m: 25.9°C (ΔT = +4.9°C)</strong></li>
+        <li><strong>Station 3 (4 Tablets · High ~3,200 ppm):</strong> 0m: 21.0°C → 3m: 22.8°C → 6m: 24.5°C → 9m: 26.0°C → 12m: 27.3°C → <strong>15m: 28.4°C (ΔT = +7.4°C)</strong></li>
+      </ul>
+      <p><strong>Key Concept Takeaway:</strong> CO₂ molecules possess asymmetric molecular vibrational dipole modes at 15 micrometers (infrared spectrum). When the bottle surfaces re-emit thermal radiation as infrared, higher concentrations of CO₂ capture and re-radiate this heat internally, slowing cooling and establishing a significantly higher radiative thermal equilibrium.</p>
+    </div>
+  </div>
+</body>
+</html>

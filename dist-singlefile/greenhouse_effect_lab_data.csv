@@ -1,0 +1,7 @@
+Time_Minutes,Station1_Control_0Tablets_TempC,Station2_MedCO2_2Tablets_TempC,Station3_HighCO2_4Tablets_TempC,Station1_DeltaT_C,Station2_DeltaT_C,Station3_DeltaT_C,Estimated_CO2_PPM_Station1,Estimated_CO2_PPM_Station2,Estimated_CO2_PPM_Station3
+0,21.0,21.0,21.0,0.0,0.0,0.0,420,1500,3200
+3,21.6,22.1,22.8,0.6,1.1,1.8,420,1500,3200
+6,22.2,23.3,24.5,1.2,2.3,3.5,420,1500,3200
+9,22.7,24.3,26.0,1.7,3.3,5.0,420,1500,3200
+12,23.1,25.2,27.3,2.1,4.2,6.3,420,1500,3200
+15,23.5,25.9,28.4,2.5,4.9,7.4,420,1500,3200

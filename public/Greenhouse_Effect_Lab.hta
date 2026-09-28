@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <title>Greenhouse Effect & Climate Change Lab</title>
+  <HTA:APPLICATION 
+    ID="GreenhouseEffectLabApp"
+    APPLICATIONNAME="Greenhouse Effect Lab"
+    BORDER="thin"
+    BORDERSTYLE="normal"
+    CAPTION="yes"
+    ICON="explorer.exe"
+    MAXIMIZEBUTTON="yes"
+    MINIMIZEBUTTON="yes"
+    SHOWINTASKBAR="yes"
+    SINGLEINSTANCE="yes"
+    SYSMENU="yes"
+    WINDOWSTATE="maximize"
+    NAVIGABLE="yes"
+    SCROLL="no"
+  />
+  <script type="text/javascript">
+    window.onload = function() {
+      try {
+        var wsh = new ActiveXObject('WScript.Shell');
+        // Launch in modern Edge / Chrome app window
+        wsh.Run('msedge.exe --app="' + location.href.replace(/\.hta$/i, '_App.html') + '"', 1, false);
+        window.close();
+      } catch(e) {
+        // Fallback
+        location.href = 'Greenhouse_Effect_Lab_App.html';
+      }
+    };
+  </script>
+</head>
+<body style="background-color:#020617; color:#f8fafc; font-family:sans-serif; text-align:center; padding-top:20%;">
+  <h2>Starting Greenhouse Effect & Climate Change Lab...</h2>
+  <p>If the window does not appear in 3 seconds, <a href="Greenhouse_Effect_Lab_App.html" style="color:#38bdf8;">click here to open directly</a>.</p>
+</body>
+</html>
