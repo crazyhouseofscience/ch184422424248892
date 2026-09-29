@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { ActiveModule } from '../types';
 import { getExpectedPassword, setCustomPassword, DEFAULT_PASSCODE, revokeAuthorization } from './AccessGateModal';
+import { resetPreLabState } from './PreLabGatingModal';
 
 interface TeacherUnlockModalProps {
   isOpen: boolean;
@@ -78,6 +79,7 @@ export const TeacherUnlockModal: React.FC<TeacherUnlockModalProps> = ({
 
   const handleTestLockScreen = () => {
     revokeAuthorization();
+    resetPreLabState();
     window.location.reload();
   };
 

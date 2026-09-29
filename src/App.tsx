@@ -11,7 +11,8 @@ import { LabGuideModal } from './components/LabGuideModal';
 import { TeacherUnlockModal } from './components/TeacherUnlockModal';
 import { DisplaySettingsModal, AppFontSize, AppTheme } from './components/DisplaySettingsModal';
 import { StandaloneDownloadModal } from './components/StandaloneDownloadModal';
-import { AccessGateModal, isAlreadyAuthorized } from './components/AccessGateModal';
+import { AccessGateModal, isAlreadyAuthorized, revokeAuthorization } from './components/AccessGateModal';
+import { PreLabGatingModal, isPreLabAlreadyCompleted, resetPreLabState } from './components/PreLabGatingModal';
 import { Sparkles, CheckCircle2, X, Unlock } from 'lucide-react';
 import { safeLocalStorage, safeSessionStorage } from './utils/storage';
 
@@ -56,6 +57,11 @@ export default function App() {
   // Classroom Passcode Protection Gate
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return isAlreadyAuthorized();
+  });
+
+  // Pre-Lab Reading & Handout Completion Gate
+  const [isPreLabCompleted, setIsPreLabCompleted] = useState<boolean>(() => {
+    return isPreLabAlreadyCompleted();
   });
 
   // Display Settings: Theme and Font Size
@@ -310,7 +316,9 @@ export default function App() {
         onOpenDisplayModal={() => setIsDisplayModalOpen(true)}
         onLockApp={() => {
           revokeAuthorization();
+          resetPreLabState();
           setIsAuthenticated(false);
+          setIsPreLabCompleted(false);
         }}
         onNextSlide={handleNextSlide}
         onPrevSlide={handlePrevSlide}
@@ -453,6 +461,15 @@ export default function App() {
       {/* Classroom Access Password Gate Modal */}
       {!isAuthenticated && (
         <AccessGateModal onAuthorized={() => setIsAuthenticated(true)} />
+      )}
+
+      {/* Mandatory Pre-Lab Reading & Handout Gate Modal (Appears after password) */}
+      {isAuthenticated && !isPreLabCompleted && (
+        <PreLabGatingModal 
+          isOpen={true} 
+          onComplete={() => setIsPreLabCompleted(true)} 
+          isTeacherMode={isTeacherMode}
+        />
       )}
 
       {/* Teacher Notification Toast */}

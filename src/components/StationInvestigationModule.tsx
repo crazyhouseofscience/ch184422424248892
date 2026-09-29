@@ -26,9 +26,11 @@ import {
   Volume2,
   VolumeX,
   Bell,
-  LineChart
+  LineChart,
+  BookOpen
 } from 'lucide-react';
 import { StationEquipmentSetup, StationProgress } from '../types';
+import { StationOverviewModal } from './StationOverviewModal';
 import { 
   playClampSnapSound, 
   playWaterPourSound, 
@@ -72,6 +74,7 @@ export const StationInvestigationModule: React.FC<StationInvestigationModuleProp
 
   // Active Hint Modal
   const [showHintModal, setShowHintModal] = useState<boolean>(false);
+  const [showOverviewModal, setShowOverviewModal] = useState<boolean>(false);
 
   // Audio mute state
   const [isMuted, setIsMuted] = useState<boolean>(getIsAudioMuted());
@@ -681,6 +684,15 @@ export const StationInvestigationModule: React.FC<StationInvestigationModuleProp
         {/* Actions */}
         <div className="flex items-center space-x-1.5 text-xs">
           <button
+            onClick={() => setShowOverviewModal(true)}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/50 transition text-[11px] font-semibold"
+            title="Read detailed explanation of Part 1, 2, and 3 before starting"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Read Parts 1, 2, & 3 Guide</span>
+          </button>
+
+          <button
             onClick={() => setShowHintModal(true)}
             className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition text-[11px] font-semibold"
           >
@@ -787,6 +799,32 @@ export const StationInvestigationModule: React.FC<StationInvestigationModuleProp
                   {item.valid && <Check className={`w-2.5 h-2.5 ${item.active ? 'text-slate-950' : 'text-emerald-400'}`} />}
                 </button>
               ))}
+            </div>
+
+            {/* Pre-Lab Student Purpose Callout */}
+            <div className="p-2.5 rounded-lg bg-indigo-950/40 border border-indigo-500/40 flex items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-indigo-400 shrink-0" />
+                <div className="text-[11px] leading-tight">
+                  <span className="font-bold text-white">
+                    {stationNumber === 1 && 'Part 1 Purpose: Experimental Control with Ambient Air (0 Tablets)'}
+                    {stationNumber === 2 && 'Part 2 Purpose: Medium Greenhouse Gas Forcing (~1,800 ppm CO₂, 2 Tablets)'}
+                    {stationNumber === 3 && 'Part 3 Purpose: High Greenhouse Gas Concentration (~3,200 ppm CO₂, 4 Tablets)'}
+                  </span>
+                  <span className="text-slate-400 block mt-0.5">
+                    {stationNumber === 1 && 'Provides the baseline heating rate (+4.3°C rise) for comparison.'}
+                    {stationNumber === 2 && 'Tests how adding 2 fizzing tablets accelerates thermal retention (+6.5°C rise).'}
+                    {stationNumber === 3 && 'Tests maximum infrared trapping (+8.2°C rise) from 4 fizzing tablets.'}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowOverviewModal(true)}
+                className="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[10px] shrink-0 transition"
+              >
+                Read Details
+              </button>
             </div>
 
             {/* Instructor Auto-Complete Setup Shortcut */}
@@ -1774,6 +1812,13 @@ export const StationInvestigationModule: React.FC<StationInvestigationModuleProp
           </div>
         </div>
       )}
+
+      {/* Parts 1, 2, & 3 Pre-Lab Overview Guide Modal */}
+      <StationOverviewModal
+        isOpen={showOverviewModal}
+        onClose={() => setShowOverviewModal(false)}
+        initialTab={stationNumber}
+      />
     </div>
   );
 };
