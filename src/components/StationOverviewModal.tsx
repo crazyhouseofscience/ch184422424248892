@@ -16,7 +16,9 @@ import {
   Zap,
   Gauge
 } from 'lucide-react';
-import setupImage from '../assets/images/lab_experiment_setup_1790697813685.jpg';
+import setupImgBottle1 from '../assets/images/setup_control_bottle_1790716779013.jpg';
+import setupImgBottle2 from '../assets/images/setup_medium_co2_bottle_1790716788801.jpg';
+import setupImgBottle3 from '../assets/images/setup_high_co2_bottle_1790716799328.jpg';
 
 interface StationOverviewModalProps {
   isOpen: boolean;
@@ -137,20 +139,44 @@ export const StationOverviewModal: React.FC<StationOverviewModalProps> = ({
                 </p>
               </div>
 
-              {/* Apparatus Setup Image */}
-              <div className="rounded-xl overflow-hidden border border-slate-700 bg-slate-950 p-3 space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold text-sky-400 uppercase tracking-wider">
+              {/* Apparatus Setup: 3 Distinct Setups */}
+              <div className="rounded-xl overflow-hidden border border-slate-700 bg-slate-950 p-3 space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between text-xs font-bold text-sky-400 uppercase tracking-wider">
                   <span className="flex items-center gap-2">
                     <FlaskConical className="w-4 h-4 text-amber-400" />
-                    <span>Apparatus Setup: 3 Bottles with Heat Lamp (15 cm Measured Distance)</span>
+                    <span>Apparatus Setup: Three Controlled Systems (15 cm Distance · 21.0 °C Ambient)</span>
                   </span>
-                  <span className="text-[10px] text-slate-400 font-mono">100 mL Water per Bottle</span>
+                  <span className="text-[10px] text-slate-400 font-mono">100 mL Water & Headspace Probe Each</span>
                 </div>
-                <img 
-                  src={setupImage} 
-                  alt="Apparatus Setup" 
-                  className="w-full max-h-[260px] object-cover rounded-lg border border-slate-800"
-                />
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                  <div className="rounded-lg border border-sky-500/40 bg-slate-900/90 overflow-hidden">
+                    <div className="px-2 py-1 bg-sky-950/80 border-b border-sky-800/60 text-[11px] font-bold text-sky-300 flex justify-between items-center">
+                      <span>Setup 1: Control</span>
+                      <span className="text-[10px] text-emerald-400 font-mono">21.0 °C</span>
+                    </div>
+                    <img src={setupImgBottle1} alt="Setup 1: 0 Tablets" className="w-full aspect-video object-cover" />
+                    <p className="p-1.5 text-[10px] text-slate-300">0 tablets, still water, probe in headspace, 15 cm distance.</p>
+                  </div>
+
+                  <div className="rounded-lg border border-amber-500/40 bg-slate-900/90 overflow-hidden">
+                    <div className="px-2 py-1 bg-amber-950/80 border-b border-amber-800/60 text-[11px] font-bold text-amber-300 flex justify-between items-center">
+                      <span>Setup 2: Low CO₂</span>
+                      <span className="text-[10px] text-emerald-400 font-mono">21.0 °C</span>
+                    </div>
+                    <img src={setupImgBottle2} alt="Setup 2: 2 Tablets" className="w-full aspect-video object-cover" />
+                    <p className="p-1.5 text-[10px] text-slate-300">2 tablets bubbling, probe in headspace, 15 cm distance.</p>
+                  </div>
+
+                  <div className="rounded-lg border border-rose-500/40 bg-slate-900/90 overflow-hidden">
+                    <div className="px-2 py-1 bg-rose-950/80 border-b border-rose-800/60 text-[11px] font-bold text-rose-300 flex justify-between items-center">
+                      <span>Setup 3: High CO₂</span>
+                      <span className="text-[10px] text-emerald-400 font-mono">21.0 °C</span>
+                    </div>
+                    <img src={setupImgBottle3} alt="Setup 3: 4 Tablets" className="w-full aspect-video object-cover" />
+                    <p className="p-1.5 text-[10px] text-slate-300">4 tablets dense fizzing, probe in headspace, 15 cm distance.</p>
+                  </div>
+                </div>
               </div>
 
               {/* 3-Part Quick Comparison Table */}

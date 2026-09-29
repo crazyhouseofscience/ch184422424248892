@@ -18,7 +18,9 @@ import {
   Ruler
 } from 'lucide-react';
 import { safeLocalStorage, safeSessionStorage } from '../utils/storage';
-import setupImage from '../assets/images/lab_experiment_setup_1790697813685.jpg';
+import setupImgBottle1 from '../assets/images/setup_control_bottle_1790716779013.jpg';
+import setupImgBottle2 from '../assets/images/setup_medium_co2_bottle_1790716788801.jpg';
+import setupImgBottle3 from '../assets/images/setup_high_co2_bottle_1790716799328.jpg';
 
 interface PreLabGatingModalProps {
   isOpen: boolean;
@@ -141,38 +143,114 @@ export const PreLabGatingModal: React.FC<PreLabGatingModalProps> = ({
             </p>
           </div>
 
-          {/* Experimental Setup Visual Diagram */}
+          {/* Experimental Setup Visual Diagrams - 3 Setups Each */}
           <div className="rounded-xl overflow-hidden border border-slate-700 bg-slate-950 p-3 sm:p-4 space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs font-bold text-sky-400 flex items-center gap-2 uppercase tracking-wider">
                 <Sun className="w-4 h-4 text-amber-400" />
-                <span>Apparatus Setup Diagram: Three Atmospheric Chambers</span>
+                <span>Three Distinct Experimental Setups (15 cm Measured Distance · 21.0 °C Starting Temp)</span>
               </span>
-              <button
-                type="button"
-                onClick={() => setShowImageZoom(prev => !prev)}
-                className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1 transition"
-              >
-                <Eye className="w-3.5 h-3.5" />
-                <span>{showImageZoom ? 'Collapse' : 'Expand Setup Photo'}</span>
-              </button>
+              <span className="text-[11px] text-amber-300 font-mono bg-amber-950/80 px-2 py-0.5 rounded border border-amber-500/40">
+                100 mL Water & Digital Headspace Probe Each
+              </span>
             </div>
 
-            <div className="relative rounded-lg overflow-hidden border border-slate-800 bg-black/60 group">
-              <img 
-                src={setupImage} 
-                alt="Apparatus Setup: 3 bottles with heat lamp at 15 cm distance" 
-                className={`w-full object-cover rounded-lg transition-all duration-300 ${
-                  showImageZoom ? 'max-h-[500px]' : 'max-h-[280px] sm:max-h-[320px]'
-                }`}
-              />
-              <div className="absolute bottom-2 left-2 right-2 bg-slate-950/85 backdrop-blur-md p-2 rounded-lg border border-slate-700/80 text-[11px] text-slate-300 flex flex-wrap items-center justify-between gap-2">
-                <span className="font-mono text-amber-300">
-                  Heat Lamp: 15 cm Measured Distance · 100 mL Water per Bottle
-                </span>
-                <span className="text-slate-400 text-[10px]">
-                  Bottle 1: 0 Tablets · Bottle 2: 2 Tablets · Bottle 3: 4 Tablets
-                </span>
+            {/* 3 Separate Setups Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+              {/* Setup 1: Control (0 Tablets) */}
+              <div className="rounded-xl border border-sky-500/50 bg-slate-900/90 overflow-hidden flex flex-col justify-between shadow-lg">
+                <div className="p-2.5 bg-sky-950/80 border-b border-sky-800/60 flex items-center justify-between">
+                  <span className="text-xs font-bold text-sky-300 flex items-center gap-1.5">
+                    <FlaskConical className="w-3.5 h-3.5 text-sky-400" />
+                    <span>Setup 1: Control (Normal Air)</span>
+                  </span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-sky-900/80 text-sky-200 border border-sky-600/50 font-bold">
+                    0 Tablets
+                  </span>
+                </div>
+                <div className="relative aspect-video bg-black overflow-hidden group">
+                  <img 
+                    src={setupImgBottle1} 
+                    alt="Setup 1: Control Bottle with 0 Tablets, digital probe, 15 cm lamp distance, starting at 21.0°C" 
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                  <div className="absolute top-2 right-2 bg-slate-950/90 px-2 py-0.5 rounded text-[10px] font-mono text-emerald-400 border border-emerald-500/50 font-bold">
+                    21.0 °C
+                  </div>
+                </div>
+                <div className="p-2.5 text-[11px] text-slate-300 space-y-1 bg-slate-950/40">
+                  <p className="font-semibold text-white">Bottle 1 Components:</p>
+                  <ul className="space-y-0.5 text-slate-300 text-[10px] list-disc list-inside">
+                    <li>100 mL still water (0 tablets added)</li>
+                    <li>Digital probe suspended in headspace</li>
+                    <li>Digital readout reading <strong>21.0 °C</strong></li>
+                    <li>Heat lamp clamped at <strong>15 cm</strong></li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Setup 2: Low CO2 (2 Tablets) */}
+              <div className="rounded-xl border border-amber-500/50 bg-slate-900/90 overflow-hidden flex flex-col justify-between shadow-lg">
+                <div className="p-2.5 bg-amber-950/80 border-b border-amber-800/60 flex items-center justify-between">
+                  <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Setup 2: Low CO₂</span>
+                  </span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-900/80 text-amber-200 border border-amber-600/50 font-bold">
+                    2 Tablets
+                  </span>
+                </div>
+                <div className="relative aspect-video bg-black overflow-hidden group">
+                  <img 
+                    src={setupImgBottle2} 
+                    alt="Setup 2: Low CO2 Bottle with 2 dissolving tablets, bubbles rising, digital probe, 15 cm lamp distance" 
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                  <div className="absolute top-2 right-2 bg-slate-950/90 px-2 py-0.5 rounded text-[10px] font-mono text-emerald-400 border border-emerald-500/50 font-bold">
+                    21.0 °C
+                  </div>
+                </div>
+                <div className="p-2.5 text-[11px] text-slate-300 space-y-1 bg-slate-950/40">
+                  <p className="font-semibold text-white">Bottle 2 Components:</p>
+                  <ul className="space-y-0.5 text-slate-300 text-[10px] list-disc list-inside">
+                    <li>100 mL water + <strong>2 fizzing tablets</strong></li>
+                    <li>Moderate CO₂ bubbles rising into air space</li>
+                    <li>Digital readout reading <strong>21.0 °C</strong></li>
+                    <li>Heat lamp clamped at <strong>15 cm</strong></li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Setup 3: High CO2 (4 Tablets) */}
+              <div className="rounded-xl border border-rose-500/50 bg-slate-900/90 overflow-hidden flex flex-col justify-between shadow-lg">
+                <div className="p-2.5 bg-rose-950/80 border-b border-rose-800/60 flex items-center justify-between">
+                  <span className="text-xs font-bold text-rose-300 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Setup 3: High CO₂</span>
+                  </span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-rose-900/80 text-rose-200 border border-rose-600/50 font-bold">
+                    4 Tablets
+                  </span>
+                </div>
+                <div className="relative aspect-video bg-black overflow-hidden group">
+                  <img 
+                    src={setupImgBottle3} 
+                    alt="Setup 3: High CO2 Bottle with 4 effervescent tablets, dense bubbling CO2, digital probe, 15 cm lamp distance" 
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                  <div className="absolute top-2 right-2 bg-slate-950/90 px-2 py-0.5 rounded text-[10px] font-mono text-emerald-400 border border-emerald-500/50 font-bold">
+                    21.0 °C
+                  </div>
+                </div>
+                <div className="p-2.5 text-[11px] text-slate-300 space-y-1 bg-slate-950/40">
+                  <p className="font-semibold text-white">Bottle 3 Components:</p>
+                  <ul className="space-y-0.5 text-slate-300 text-[10px] list-disc list-inside">
+                    <li>100 mL water + <strong>4 fizzing tablets</strong></li>
+                    <li>Dense, vigorous CO₂ effervescence</li>
+                    <li>Digital readout reading <strong>21.0 °C</strong></li>
+                    <li>Heat lamp clamped at <strong>15 cm</strong></li>
+                  </ul>
+                </div>
               </div>
             </div>
           </div>
