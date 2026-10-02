@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { StationEquipmentSetup, StationProgress } from '../types';
 import { playLampClickSound } from '../utils/audio';
+import { getSessionVariances } from '../utils/sessionDataEngine';
 
 interface ThreeStationSummarySlideProps {
   progressRecord: Record<1 | 2 | 3, StationProgress>;
@@ -26,6 +27,7 @@ interface ThreeStationSummarySlideProps {
   onGoToVisualization: () => void;
   onGoToAtmosphereSim: () => void;
   onRevisitStation: (st: 1 | 2 | 3) => void;
+  onGoToRadiationSim?: () => void;
 }
 
 export const ThreeStationSummarySlide: React.FC<ThreeStationSummarySlideProps> = ({
@@ -35,6 +37,7 @@ export const ThreeStationSummarySlide: React.FC<ThreeStationSummarySlideProps> =
   onGoToVisualization,
   onGoToAtmosphereSim,
   onRevisitStation,
+  onGoToRadiationSim,
 }) => {
   const [allLampsOn, setAllLampsOn] = useState<boolean>(true);
   const [coolingElapsedMinutes, setCoolingElapsedMinutes] = useState<number>(0);
@@ -62,9 +65,14 @@ export const ThreeStationSummarySlide: React.FC<ThreeStationSummarySlideProps> =
   // Temperature calculations at minute 15 (with cooling when lamps off)
   const getFinalTemp = (station: 1 | 2 | 3) => {
     const data = progressRecord[station]?.recordedData;
-    let base = data && data[15] !== undefined ? data[15] : (station === 1 ? 23.5 : station === 2 ? 25.9 : 28.4);
+    const variances = getSessionVariances();
+    const stVar = station === 1 ? variances.station1 : station === 2 ? variances.station2 : variances.station3;
+    const baseDelta = station === 1 ? 2.5 : station === 2 ? 4.9 : 7.4;
+    const fallbackFinal = Number((stVar.ambient + (baseDelta + stVar.deltaNoise)).toFixed(1));
+
+    let base = data && data[15] !== undefined ? data[15] : fallbackFinal;
     if (!allLampsOn && coolingElapsedMinutes > 0) {
-      const ambient = 21.0;
+      const ambient = stVar.ambient;
       const tauCool = station === 1 ? 5.0 : station === 2 ? 8.0 : 11.5;
       base = ambient + (base - ambient) * Math.exp(-coolingElapsedMinutes / tauCool);
     }
@@ -75,9 +83,10 @@ export const ThreeStationSummarySlide: React.FC<ThreeStationSummarySlideProps> =
   const t2 = getFinalTemp(2);
   const t3 = getFinalTemp(3);
 
-  const delta1 = Number((t1 - 21.0).toFixed(1));
-  const delta2 = Number((t2 - 21.0).toFixed(1));
-  const delta3 = Number((t3 - 21.0).toFixed(1));
+  const amb = getSessionVariances().station1.ambient;
+  const delta1 = Number((t1 - amb).toFixed(1));
+  const delta2 = Number((t2 - amb).toFixed(1));
+  const delta3 = Number((t3 - amb).toFixed(1));
   const maxDiff = Number((t3 - t1).toFixed(1));
 
   // Time series points for the graph
@@ -85,9 +94,13 @@ export const ThreeStationSummarySlide: React.FC<ThreeStationSummarySlideProps> =
   const getCurveAtMin = (station: 1 | 2 | 3, m: number) => {
     const data = progressRecord[station]?.recordedData;
     if (data && data[m] !== undefined) return data[m];
-    const ambient = 21.0;
-    const maxDelta = station === 1 ? 2.5 : station === 2 ? 4.9 : 7.4;
-    const tau = station === 1 ? 6.5 : station === 2 ? 7.2 : 8.0;
+    const variances = getSessionVariances();
+    const stVar = station === 1 ? variances.station1 : station === 2 ? variances.station2 : variances.station3;
+    const ambient = stVar.ambient;
+    const baseDelta = station === 1 ? 2.5 : station === 2 ? 4.9 : 7.4;
+    const maxDelta = baseDelta + stVar.deltaNoise;
+    const baseTau = station === 1 ? 6.5 : station === 2 ? 7.2 : 8.0;
+    const tau = baseTau + stVar.tauOffset;
     return Number((ambient + maxDelta * (1 - Math.exp(-m / tau))).toFixed(1));
   };
 
@@ -139,6 +152,17 @@ export const ThreeStationSummarySlide: React.FC<ThreeStationSummarySlideProps> =
           </div>
 
           <div className="flex items-center gap-2">
+            {onGoToRadiationSim && (
+              <button
+                onClick={onGoToRadiationSim}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-slate-950 shadow-amber-500/20 active:scale-95 animate-pulse"
+                title="Watch incoming light transform to trapped heat across all 3 setups"
+              >
+                <Flame className="w-3.5 h-3.5 fill-slate-950" />
+                <span>Photon & Heat Trapping Sim</span>
+              </button>
+            )}
+
             <button
               onClick={handleToggleAllLamps}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow ${
@@ -503,7 +527,24 @@ export const ThreeStationSummarySlide: React.FC<ThreeStationSummarySlideProps> =
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+          {onGoToRadiationSim && (
+            <button
+              onClick={onGoToRadiationSim}
+              className="p-4 rounded-xl bg-slate-800/80 hover:bg-slate-800 border-2 border-amber-500/60 hover:border-amber-400 transition text-left space-y-2 group shadow-lg"
+            >
+              <div className="w-8 h-8 rounded-lg bg-amber-950/80 border border-amber-800 flex items-center justify-center text-amber-400 group-hover:scale-105 transition">
+                <Flame className="w-4 h-4 fill-amber-400" />
+              </div>
+              <h4 className="text-sm font-bold text-white group-hover:text-amber-300 transition">
+                Module 5: Radiation & Heat Trapping
+              </h4>
+              <p className="text-xs text-slate-400">
+                Pure visual simulation: Light enters each bottle, transforms into heat at the base, and gets trapped by CO₂ molecules.
+              </p>
+            </button>
+          )}
+
           <button
             onClick={onGoToAtmosphericExplorer}
             className="p-4 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/80 hover:border-sky-500/60 transition text-left space-y-2 group"
@@ -512,7 +553,7 @@ export const ThreeStationSummarySlide: React.FC<ThreeStationSummarySlideProps> =
               <Cloud className="w-4 h-4" />
             </div>
             <h4 className="text-sm font-bold text-white group-hover:text-sky-300 transition">
-              Module 5: Clouds & Other Gases
+              Module 6: Clouds & Other Gases
             </h4>
             <p className="text-xs text-slate-400">
               Simulate cloud cover (cirrus, stratus diffusers), solar incidence angles, and alternative gases like Methane (CH₄) and Water Vapor (H₂O).
@@ -527,7 +568,7 @@ export const ThreeStationSummarySlide: React.FC<ThreeStationSummarySlideProps> =
               <LineChart className="w-4 h-4" />
             </div>
             <h4 className="text-sm font-bold text-white group-hover:text-emerald-300 transition">
-              Module 6: Data & Graphing Studio
+              Module 7: Data & Graphing Studio
             </h4>
             <p className="text-xs text-slate-400">
               Plot custom series, edit recorded measurements, compute heating slopes, and export lab graphs for science reporting.
@@ -542,7 +583,7 @@ export const ThreeStationSummarySlide: React.FC<ThreeStationSummarySlideProps> =
               <Globe2 className="w-4 h-4" />
             </div>
             <h4 className="text-sm font-bold text-white group-hover:text-indigo-300 transition">
-              Module 7: Planetary Simulator
+              Module 8: Planetary Simulator
             </h4>
             <p className="text-xs text-slate-400">
               Compare Earth's greenhouse balance against the runaway greenhouse effect of Venus and the thin atmosphere of Mars.

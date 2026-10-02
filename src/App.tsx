@@ -7,6 +7,7 @@ import { ThreeStationSummarySlide } from './components/ThreeStationSummarySlide'
 import { AtmosphericConditionsExplorer } from './components/AtmosphericConditionsExplorer';
 import { DataVisualizationStudio } from './components/DataVisualizationStudio';
 import { AtmosphereSimulator } from './components/AtmosphereSimulator';
+import { PhotonLightSimulationModule } from './components/PhotonLightSimulationModule';
 import { LabGuideModal } from './components/LabGuideModal';
 import { TeacherUnlockModal } from './components/TeacherUnlockModal';
 import { DisplaySettingsModal, AppFontSize, AppTheme } from './components/DisplaySettingsModal';
@@ -15,12 +16,19 @@ import { AccessGateModal, isAlreadyAuthorized, revokeAuthorization } from './com
 import { PreLabGatingModal, isPreLabAlreadyCompleted, resetPreLabState } from './components/PreLabGatingModal';
 import { Sparkles, CheckCircle2, X, Unlock } from 'lucide-react';
 import { safeLocalStorage, safeSessionStorage } from './utils/storage';
+import { 
+  GraphIncrement, 
+  getStoredGraphIncrement, 
+  setStoredGraphIncrement, 
+  refreshSessionVariances 
+} from './utils/sessionDataEngine';
 
 const MODULE_ORDER: ActiveModule[] = [
   'station-1',
   'station-2',
   'station-3',
   'station-summary',
+  'light-heat-radiation',
   'atmospheric-conditions',
   'data-visualization',
   'atmosphere',
@@ -63,6 +71,22 @@ export default function App() {
   const [isPreLabCompleted, setIsPreLabCompleted] = useState<boolean>(() => {
     return isPreLabAlreadyCompleted();
   });
+
+  // Explicit user trigger to return to the Opening Screen modal
+  const [isViewingOpeningScreen, setIsViewingOpeningScreen] = useState<boolean>(false);
+
+  // Graph Milestone Interval Option (2m vs 3m increments)
+  const [graphIncrement, setGraphIncrement] = useState<GraphIncrement>(() => {
+    return getStoredGraphIncrement();
+  });
+
+  const handleToggleGraphIncrement = useCallback(() => {
+    setGraphIncrement(prev => {
+      const next = prev === 3 ? 2 : 3;
+      setStoredGraphIncrement(next);
+      return next;
+    });
+  }, []);
 
   // Display Settings: Theme and Font Size
   const [theme, setTheme] = useState<AppTheme>(() => {
@@ -320,6 +344,9 @@ export default function App() {
           setIsAuthenticated(false);
           setIsPreLabCompleted(false);
         }}
+        onReturnToOpeningScreen={() => setIsViewingOpeningScreen(true)}
+        graphIncrement={graphIncrement}
+        onToggleGraphIncrement={handleToggleGraphIncrement}
         onNextSlide={handleNextSlide}
         onPrevSlide={handlePrevSlide}
         currentSlideIndex={currentSlideIndex}
@@ -340,6 +367,8 @@ export default function App() {
             onUpdateProgress={(up) => handleUpdateProgress(1, up)}
             onProceedToNext={() => setActiveModule('station-2')}
             isTeacherMode={isTeacherMode}
+            graphIncrement={graphIncrement}
+            onToggleGraphIncrement={handleToggleGraphIncrement}
           />
         )}
 
@@ -353,6 +382,8 @@ export default function App() {
             onUpdateProgress={(up) => handleUpdateProgress(2, up)}
             onProceedToNext={() => setActiveModule('station-3')}
             isTeacherMode={isTeacherMode}
+            graphIncrement={graphIncrement}
+            onToggleGraphIncrement={handleToggleGraphIncrement}
           />
         )}
 
@@ -366,6 +397,8 @@ export default function App() {
             onUpdateProgress={(up) => handleUpdateProgress(3, up)}
             onProceedToNext={() => setActiveModule('station-summary')}
             isTeacherMode={isTeacherMode}
+            graphIncrement={graphIncrement}
+            onToggleGraphIncrement={handleToggleGraphIncrement}
           />
         )}
 
@@ -378,10 +411,18 @@ export default function App() {
             onGoToVisualization={() => setActiveModule('data-visualization')}
             onGoToAtmosphereSim={() => setActiveModule('atmosphere')}
             onRevisitStation={(st) => setActiveModule(`station-${st}` as ActiveModule)}
+            onGoToRadiationSim={() => setActiveModule('light-heat-radiation')}
           />
         )}
 
-        {/* Module 5: Clouds, Angles & Other Atmospheric Gases */}
+        {/* Module 5: Pure Graphic Light-to-Heat & CO2 Trapping Simulation (No Text Descriptors) */}
+        {activeModule === 'light-heat-radiation' && (
+          <PhotonLightSimulationModule
+            onBackToLab={() => setActiveModule('station-summary')}
+          />
+        )}
+
+        {/* Module 6: Clouds, Angles & Other Atmospheric Gases */}
         {activeModule === 'atmospheric-conditions' && (
           <AtmosphericConditionsExplorer />
         )}
@@ -392,6 +433,8 @@ export default function App() {
             labData={labData}
             setLabData={setLabData}
             progressRecord={progressRecord}
+            graphIncrement={graphIncrement}
+            onToggleGraphIncrement={handleToggleGraphIncrement}
           />
         )}
 
@@ -463,11 +506,15 @@ export default function App() {
         <AccessGateModal onAuthorized={() => setIsAuthenticated(true)} />
       )}
 
-      {/* Mandatory Pre-Lab Reading & Handout Gate Modal (Appears after password) */}
-      {isAuthenticated && !isPreLabCompleted && (
+      {/* Mandatory Pre-Lab Reading & Handout Gate Modal (Appears after password, or on clicking 'Opening Screen') */}
+      {isAuthenticated && (!isPreLabCompleted || isViewingOpeningScreen) && (
         <PreLabGatingModal 
           isOpen={true} 
-          onComplete={() => setIsPreLabCompleted(true)} 
+          onComplete={() => {
+            setIsPreLabCompleted(true);
+            setIsViewingOpeningScreen(false);
+          }}
+          onClose={isPreLabCompleted ? () => setIsViewingOpeningScreen(false) : undefined}
           isTeacherMode={isTeacherMode}
         />
       )}

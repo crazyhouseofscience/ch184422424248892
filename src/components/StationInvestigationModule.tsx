@@ -44,6 +44,11 @@ import {
   getIsAudioMuted
 } from '../utils/audio';
 import { ApparatusVisualizer } from './ApparatusVisualizer';
+import { 
+  GraphIncrement, 
+  getSessionVariances, 
+  getIntervalMilestones 
+} from '../utils/sessionDataEngine';
 
 interface StationInvestigationModuleProps {
   stationNumber: 1 | 2 | 3;
@@ -53,6 +58,8 @@ interface StationInvestigationModuleProps {
   onUpdateProgress: (update: Partial<StationProgress>) => void;
   onProceedToNext: () => void;
   isTeacherMode?: boolean;
+  graphIncrement?: GraphIncrement;
+  onToggleGraphIncrement?: () => void;
 }
 
 export const StationInvestigationModule: React.FC<StationInvestigationModuleProps> = ({
@@ -63,6 +70,8 @@ export const StationInvestigationModule: React.FC<StationInvestigationModuleProp
   onUpdateProgress,
   onProceedToNext,
   isTeacherMode = false,
+  graphIncrement = 3,
+  onToggleGraphIncrement,
 }) => {
   // Main phase: 'setup' -> 'experiment'
   const [phase, setPhase] = useState<'setup' | 'experiment'>(
@@ -175,13 +184,15 @@ export const StationInvestigationModule: React.FC<StationInvestigationModuleProp
   // strictly factoring in both:
   // 1) The exact duration the light was off (zero radiant energy received during that period)
   // 2) The loss of added heat (Newton cooling actively dissipates absorbed thermal energy)
-  // When turned back on, the temperature does NOT jump back to the assumed position;
-  // instead, radiant heating resumes from the cooled temperature, with equivalent thermal
-  // progress age (tEquiv) set back by the cooling loss, ensuring a realistic thermal lag!
+  // Incorporates slight session variance on refresh so every classroom group gets unique, fresh data!
   const getPhysicsTemp = (targetMin: number, customSegments?: { startMin: number; lampOn: boolean }[]) => {
-    const ambient = 21.0;
-    const maxDelta = assignedTablets === 0 ? 2.5 : assignedTablets === 2 ? 4.9 : 7.4;
-    const tauHeat = assignedTablets === 0 ? 6.5 : assignedTablets === 2 ? 7.2 : 8.0;
+    const variances = getSessionVariances();
+    const stVar = stationNumber === 1 ? variances.station1 : stationNumber === 2 ? variances.station2 : variances.station3;
+    const ambient = stVar.ambient;
+    const baseMaxDelta = assignedTablets === 0 ? 2.5 : assignedTablets === 2 ? 4.9 : 7.4;
+    const maxDelta = Math.max(1.8, baseMaxDelta + stVar.deltaNoise);
+    const baseTauHeat = assignedTablets === 0 ? 6.5 : assignedTablets === 2 ? 7.2 : 8.0;
+    const tauHeat = Math.max(4.0, baseTauHeat + stVar.tauOffset);
     const tauCool = assignedTablets === 0 ? 5.0 : assignedTablets === 2 ? 8.0 : 11.5;
 
     // Adjust for distance from bottle: baseline is 7 inches
@@ -513,7 +524,8 @@ export const StationInvestigationModule: React.FC<StationInvestigationModuleProp
     showToast(`Instructor Mode: All 6 interval readings populated for Station ${stationNumber}.`);
   };
 
-  const intervalMinutes = [0, 3, 6, 9, 12, 15];
+  // Dynamic Milestone Intervals based on user option (2m or 3m)
+  const intervalMinutes = getIntervalMilestones(graphIncrement);
   const recordedCount = intervalMinutes.filter(m => recordedTemps[m] !== undefined).length;
   const isDataCollectionComplete = recordedCount === intervalMinutes.length || progress.dataRecorded;
 
@@ -1333,7 +1345,7 @@ export const StationInvestigationModule: React.FC<StationInvestigationModuleProp
 
               {/* Auto-Record Toggle */}
               <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-800">
-                <span className="text-slate-300">Auto-Plot Milestones (0, 3, 6, 9, 12, 15m)</span>
+                <span className="text-slate-300">Auto-Plot Milestones ({intervalMinutes.map(m => `${m}m`).join(', ')})</span>
                 <button
                   onClick={() => setAutoLogEnabled(!autoLogEnabled)}
                   className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
@@ -1417,24 +1429,40 @@ export const StationInvestigationModule: React.FC<StationInvestigationModuleProp
                 </div>
               </div>
 
-              {/* Digital Readouts */}
-              <div className="flex items-center space-x-3 text-xs font-mono">
-                <div>
-                  <span className="text-[9px] text-slate-400 font-sans block">Stopwatch</span>
-                  <span className="font-bold text-sky-400 text-sm">
+              {/* Digital Readouts (ENLARGED & HIGH VISIBILITY) */}
+              <div className="flex items-center space-x-2 sm:space-x-4">
+                {/* Stopwatch Card */}
+                <div className="bg-slate-950/90 px-3 py-1 rounded-xl border border-sky-500/50 shadow-inner flex flex-col items-center">
+                  <span className="text-[11px] font-bold text-sky-400 uppercase tracking-wider block flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>Stopwatch</span>
+                  </span>
+                  <span className="font-extrabold text-white text-base sm:text-xl font-mono tracking-tight drop-shadow">
                     {String(Math.floor(timerSeconds / 60)).padStart(2, '0')}:
                     {String(timerSeconds % 60).padStart(2, '0')}
                   </span>
                 </div>
-                <div className="h-6 w-px bg-slate-800" />
-                <div>
-                  <span className="text-[9px] text-slate-400 font-sans block">Headspace</span>
-                  <span className="font-bold text-emerald-400 text-sm">{currentLiveTemp.toFixed(1)}°C</span>
+
+                {/* Headspace Temp Card */}
+                <div className="bg-slate-950/90 px-3 py-1 rounded-xl border border-emerald-500/50 shadow-inner flex flex-col items-center">
+                  <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider block flex items-center gap-1">
+                    <Thermometer className="w-3.5 h-3.5" />
+                    <span>Headspace Temp</span>
+                  </span>
+                  <span className="font-extrabold text-emerald-300 text-base sm:text-xl font-mono tracking-tight drop-shadow">
+                    {currentLiveTemp.toFixed(1)}°C
+                  </span>
                 </div>
-                <div className="h-6 w-px bg-slate-800" />
-                <div>
-                  <span className="text-[9px] text-slate-400 font-sans block">Rise (ΔT)</span>
-                  <span className="font-bold text-amber-400 text-sm">+{(currentLiveTemp - 21.0).toFixed(1)}°C</span>
+
+                {/* Rise (dT) Card */}
+                <div className="bg-slate-950/90 px-3 py-1 rounded-xl border border-amber-500/50 shadow-inner flex flex-col items-center">
+                  <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider block flex items-center gap-1">
+                    <TrendingUp className="w-3.5 h-3.5" />
+                    <span>Rise (ΔT)</span>
+                  </span>
+                  <span className="font-extrabold text-amber-300 text-base sm:text-xl font-mono tracking-tight drop-shadow">
+                    +{(currentLiveTemp - 21.0).toFixed(1)}°C
+                  </span>
                 </div>
               </div>
             </div>
@@ -1670,18 +1698,33 @@ export const StationInvestigationModule: React.FC<StationInvestigationModuleProp
               </div>
             </div>
 
-            {/* COMPACT HORIZONTAL 6-CELL DATA TABLE STRIP (Height ~65px) */}
+            {/* COMPACT HORIZONTAL DATA TABLE STRIP */}
             <div className="bg-slate-900/90 rounded-xl p-2 border border-slate-800 shadow-md shrink-0">
-              <div className="flex items-center justify-between pb-1 border-b border-slate-800 text-[11px] font-bold text-white mb-1.5">
+              <div className="flex flex-wrap items-center justify-between pb-1 border-b border-slate-800 text-[11px] font-bold text-white mb-1.5 gap-2">
                 <span className="flex items-center gap-1.5">
                   <Table className="w-3.5 h-3.5 text-sky-400" />
-                  <span>Logged Milestone Data ({recordedCount} of 6 Recorded)</span>
+                  <span>Logged Milestone Data ({recordedCount} of {intervalMinutes.length} Recorded · {graphIncrement}m Intervals)</span>
                 </span>
-                <span className="text-[10px] text-slate-400 font-normal">Milestones unlock as stopwatch reaches each time mark</span>
+                <div className="flex items-center gap-2">
+                  {onToggleGraphIncrement && (
+                    <button
+                      onClick={onToggleGraphIncrement}
+                      className="text-[10px] text-cyan-300 hover:text-cyan-200 font-mono bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-600/50 flex items-center gap-1 transition"
+                      title="Switch interval between 2m and 3m"
+                    >
+                      <Clock className="w-3 h-3 text-cyan-400" />
+                      <span>Switch to {graphIncrement === 3 ? '2m' : '3m'}</span>
+                    </button>
+                  )}
+                  <span className="text-[10px] text-slate-400 font-normal hidden sm:inline">Unlocks as stopwatch reaches time</span>
+                </div>
               </div>
 
-              {/* 6 Interval Cards Side-by-Side */}
-              <div className="grid grid-cols-6 gap-1.5 font-mono">
+              {/* Dynamic Interval Cards Grid (Auto-fits 6 or 9 columns) */}
+              <div 
+                className="grid gap-1.5 font-mono overflow-x-auto pb-0.5"
+                style={{ gridTemplateColumns: `repeat(${intervalMinutes.length}, minmax(48px, 1fr))` }}
+              >
                 {intervalMinutes.map(m => {
                   const recorded = recordedTemps[m];
                   const isCurrentActive = currentIntervalSegment === m;

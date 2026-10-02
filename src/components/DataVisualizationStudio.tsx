@@ -17,17 +17,23 @@ import {
 } from 'lucide-react';
 import { StationDataPoint, StationProgress } from '../types';
 import { BENCHMARK_LAB_DATA } from '../data/labData';
+import { GraphIncrement, getIntervalMilestones, getSessionVariances } from '../utils/sessionDataEngine';
+import { Clock } from 'lucide-react';
 
 interface DataVisualizationStudioProps {
   labData: StationDataPoint[];
   setLabData: React.Dispatch<React.SetStateAction<StationDataPoint[]>>;
   progressRecord?: Record<1 | 2 | 3, StationProgress>;
+  graphIncrement?: GraphIncrement;
+  onToggleGraphIncrement?: () => void;
 }
 
 export const DataVisualizationStudio: React.FC<DataVisualizationStudioProps> = ({
   labData,
   setLabData,
   progressRecord,
+  graphIncrement = 3,
+  onToggleGraphIncrement,
 }) => {
   const [activeChartType, setActiveChartType] = useState<'line' | 'bar' | 'scatter'>('line');
   const [showBestFit, setShowBestFit] = useState<boolean>(true);
@@ -50,12 +56,18 @@ export const DataVisualizationStudio: React.FC<DataVisualizationStudioProps> = (
   // Import student recorded station data from the live experiment trials
   const handleImportMyRecordedData = () => {
     if (!progressRecord) return;
-    const intervals = [0, 3, 6, 9, 12, 15];
+    const intervals = getIntervalMilestones(graphIncrement);
+    const variances = getSessionVariances();
     const importedRows: StationDataPoint[] = intervals.map(m => {
-      // Station 1 recorded or fallback benchmark
-      const t0 = progressRecord[1]?.recordedData?.[m] ?? BENCHMARK_LAB_DATA.find(b => b.timeMinute === m)?.temp0Tabs ?? 21.0;
-      const t2 = progressRecord[2]?.recordedData?.[m] ?? BENCHMARK_LAB_DATA.find(b => b.timeMinute === m)?.temp2Tabs ?? 21.0;
-      const t4 = progressRecord[3]?.recordedData?.[m] ?? BENCHMARK_LAB_DATA.find(b => b.timeMinute === m)?.temp4Tabs ?? 21.0;
+      // Calculate realistic curve fallback if station wasn't manually logged
+      const amb0 = variances.station1.ambient;
+      const calcT0 = Number((amb0 + (2.5 + variances.station1.deltaNoise) * (1 - Math.exp(-m / (6.5 + variances.station1.tauOffset)))).toFixed(1));
+      const calcT2 = Number((variances.station2.ambient + (4.9 + variances.station2.deltaNoise) * (1 - Math.exp(-m / (7.2 + variances.station2.tauOffset)))).toFixed(1));
+      const calcT4 = Number((variances.station3.ambient + (7.4 + variances.station3.deltaNoise) * (1 - Math.exp(-m / (8.0 + variances.station3.tauOffset)))).toFixed(1));
+
+      const t0 = progressRecord[1]?.recordedData?.[m] ?? calcT0;
+      const t2 = progressRecord[2]?.recordedData?.[m] ?? calcT2;
+      const t4 = progressRecord[3]?.recordedData?.[m] ?? calcT4;
       return {
         timeMinute: m,
         temp0Tabs: t0,
@@ -182,6 +194,16 @@ export const DataVisualizationStudio: React.FC<DataVisualizationStudioProps> = (
 
         {/* Global Toolbar */}
         <div className="flex flex-wrap items-center gap-2">
+          {onToggleGraphIncrement && (
+            <button
+              onClick={onToggleGraphIncrement}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-700/60 text-xs font-bold transition shadow-sm"
+              title={`Switch graphing milestones between 2m and 3m intervals (Current: ${graphIncrement}m)`}
+            >
+              <Clock className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Interval: {graphIncrement}m (Switch to {graphIncrement === 3 ? '2m' : '3m'})</span>
+            </button>
+          )}
           {hasRecordedStationData && (
             <button
               onClick={handleImportMyRecordedData}

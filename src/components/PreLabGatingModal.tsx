@@ -15,7 +15,8 @@ import {
   BookOpen, 
   Sparkles,
   Layers,
-  Ruler
+  Ruler,
+  X
 } from 'lucide-react';
 import { safeLocalStorage, safeSessionStorage } from '../utils/storage';
 import setupImgBottle1 from '../assets/images/setup_control_bottle_1790716779013.jpg';
@@ -25,6 +26,7 @@ import setupImgBottle3 from '../assets/images/setup_high_co2_bottle_179071679932
 interface PreLabGatingModalProps {
   isOpen: boolean;
   onComplete: () => void;
+  onClose?: () => void;
   isTeacherMode?: boolean;
 }
 
@@ -51,6 +53,7 @@ export const resetPreLabState = () => {
 export const PreLabGatingModal: React.FC<PreLabGatingModalProps> = ({
   isOpen,
   onComplete,
+  onClose,
   isTeacherMode = false
 }) => {
   // Required student acknowledgment checkboxes
@@ -104,16 +107,29 @@ export const PreLabGatingModal: React.FC<PreLabGatingModalProps> = ({
             </div>
           </div>
 
-          {isTeacherMode && (
-            <button
-              onClick={handleAdvance}
-              className="px-3 py-1.5 rounded-lg bg-purple-900/80 hover:bg-purple-800 text-purple-200 border border-purple-500/50 text-xs font-semibold flex items-center gap-1.5 transition shadow"
-              title="Instructor Mode: Bypass pre-lab verification"
-            >
-              <Unlock className="w-3.5 h-3.5 text-purple-300" />
-              <span className="hidden sm:inline">Teacher Bypass</span>
-            </button>
-          )}
+          <div className="flex items-center space-x-2">
+            {isTeacherMode && (
+              <button
+                onClick={handleAdvance}
+                className="px-3 py-1.5 rounded-lg bg-purple-900/80 hover:bg-purple-800 text-purple-200 border border-purple-500/50 text-xs font-semibold flex items-center gap-1.5 transition shadow"
+                title="Instructor Mode: Bypass pre-lab verification"
+              >
+                <Unlock className="w-3.5 h-3.5 text-purple-300" />
+                <span className="hidden sm:inline">Teacher Bypass</span>
+              </button>
+            )}
+
+            {onClose && (
+              <button
+                onClick={onClose}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-700/60 transition"
+                title="Close Opening Screen and return to Lab"
+                aria-label="Close Opening Screen"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Scrollable Content Body */}

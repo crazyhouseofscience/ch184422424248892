@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { ActiveModule, StationProgress } from '../types';
 import { AppFontSize, AppTheme } from './DisplaySettingsModal';
+import { GraphIncrement } from '../utils/sessionDataEngine';
 import { 
   FlaskConical, 
   Sparkles, 
@@ -20,7 +21,10 @@ import {
   Palette,
   Type,
   Sun,
-  Moon
+  Moon,
+  Home,
+  Clock,
+  Flame
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -34,6 +38,9 @@ interface HeaderProps {
   onOpenTeacherModal?: () => void;
   onOpenDisplayModal?: () => void;
   onLockApp?: () => void;
+  onReturnToOpeningScreen?: () => void;
+  graphIncrement?: GraphIncrement;
+  onToggleGraphIncrement?: () => void;
   onNextSlide?: () => void;
   onPrevSlide?: () => void;
   currentSlideIndex?: number;
@@ -53,6 +60,9 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenTeacherModal,
   onOpenDisplayModal,
   onLockApp,
+  onReturnToOpeningScreen,
+  graphIncrement = 3,
+  onToggleGraphIncrement,
   onNextSlide,
   onPrevSlide,
   currentSlideIndex = 0,
@@ -123,8 +133,16 @@ export const Header: React.FC<HeaderProps> = ({
       lockReason: 'Complete all 3 stations first.',
     },
     {
+      id: 'light-heat-radiation',
+      label: '5. Radiation Sim',
+      icon: <Flame className="w-4 h-4 text-amber-500" />,
+      badge: isStation3Done ? 'Visual Sim' : isTeacherMode ? 'Unlocked 🔓' : 'Locked',
+      isLocked: isTeacherMode ? false : !isStation3Done,
+      lockReason: 'Complete all 3 stations first.',
+    },
+    {
       id: 'atmospheric-conditions',
-      label: '5. Clouds & Gases',
+      label: '6. Clouds & Gases',
       icon: <Cloud className="w-4 h-4 text-sky-500" />,
       badge: isTeacherMode ? 'Unlocked 🔓' : 'Extension',
       isLocked: isTeacherMode ? false : !isStation3Done,
@@ -132,7 +150,7 @@ export const Header: React.FC<HeaderProps> = ({
     },
     {
       id: 'data-visualization',
-      label: '6. Graphing Studio',
+      label: '7. Graphing Studio',
       icon: <LineChart className="w-4 h-4 text-emerald-500" />,
       badge: isTeacherMode ? 'Unlocked 🔓' : 'Input & Plot',
       isLocked: isTeacherMode ? false : !isStation3Done,
@@ -140,7 +158,7 @@ export const Header: React.FC<HeaderProps> = ({
     },
     {
       id: 'atmosphere',
-      label: '7. Planetary Sim',
+      label: '8. Planetary Sim',
       icon: <Globe2 className="w-4 h-4 text-indigo-500" />,
       badge: isTeacherMode ? 'Unlocked 🔓' : 'Planets',
       isLocked: isTeacherMode ? false : !isStation3Done,
@@ -167,7 +185,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="hidden xl:inline text-xs text-amber-400 font-mono font-medium">· Virtual Station Investigation</span>
               </h1>
               <div className="text-[10px] text-slate-400 leading-none mt-0.5 hidden sm:block">
-                Designed by <span className="text-slate-300 font-semibold">Keith Chapman 2026 v1.1</span> using Google AI Studio
+                Designed by <span className="text-slate-300 font-semibold">Keith Chapman 2026 v1.2</span> using Google AI Studio
               </div>
             </div>
           </div>
@@ -222,6 +240,35 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Quick Actions (Right Zone) */}
           <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
+            {/* Graph Increment Option Toggle (2m vs 3m intervals) */}
+            {onToggleGraphIncrement && (
+              <button
+                id="header-increment-btn"
+                onClick={onToggleGraphIncrement}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold text-slate-200 hover:text-white bg-slate-800/90 hover:bg-slate-700 border border-slate-700 transition"
+                title={`Click to switch between 2-minute and 3-minute graph milestone intervals (Currently: ${graphIncrement}m)`}
+              >
+                <Clock className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="hidden xl:inline">Interval:</span>
+                <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-cyan-950/80 text-cyan-300 font-bold border border-cyan-500/50">
+                  {graphIncrement}m
+                </span>
+              </button>
+            )}
+
+            {/* Return to Main Opening Screen Button */}
+            {onReturnToOpeningScreen && (
+              <button
+                id="header-opening-screen-btn"
+                onClick={onReturnToOpeningScreen}
+                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold text-amber-200 hover:text-white bg-amber-950/70 hover:bg-amber-900 border border-amber-600/60 shadow-sm transition"
+                title="Return to the Main Opening Screen (Pre-Lab Setup & Driving Question)"
+              >
+                <Home className="w-4 h-4 text-amber-400" />
+                <span className="hidden sm:inline">Opening Screen</span>
+              </button>
+            )}
+
             {/* Display / Font Size / Theme Button */}
             <button
               id="header-display-btn"

@@ -18,7 +18,8 @@ import {
   KeyRound,
   Download,
   ShieldAlert,
-  RotateCcw
+  RotateCcw,
+  Flame
 } from 'lucide-react';
 import { ActiveModule } from '../types';
 import { getExpectedPassword, setCustomPassword, DEFAULT_PASSCODE, revokeAuthorization } from './AccessGateModal';
@@ -111,20 +112,26 @@ export const TeacherUnlockModal: React.FC<TeacherUnlockModalProps> = ({
       icon: <Layers className="w-5 h-5 text-emerald-400" />,
     },
     {
+      id: 'light-heat-radiation',
+      title: '5. Radiation & Heat Trapping',
+      subtitle: 'Animated photons: Light enters, transforms to heat, trapped by CO₂',
+      icon: <Flame className="w-5 h-5 text-amber-400" />,
+    },
+    {
       id: 'atmospheric-conditions',
-      title: '5. Clouds, Angles & Other Gases',
+      title: '6. Clouds, Angles & Other Gases',
       subtitle: 'Albedo, solar inclination, CH₄, H₂O, N₂O effects',
       icon: <Cloud className="w-5 h-5 text-sky-400" />,
     },
     {
       id: 'data-visualization',
-      title: '6. Data & Graphing Studio',
+      title: '7. Data & Graphing Studio',
       subtitle: 'Interactive multi-series plot with CSV export & regression',
       icon: <LineChart className="w-5 h-5 text-emerald-400" />,
     },
     {
       id: 'atmosphere',
-      title: '7. Planetary Atmosphere Simulator',
+      title: '8. Planetary Atmosphere Simulator',
       subtitle: 'Solar radiation balance for Earth, Mars, Venus, and Ice Age',
       icon: <Globe2 className="w-5 h-5 text-indigo-400" />,
     },

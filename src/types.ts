@@ -3,6 +3,7 @@ export type ActiveModule =
   | 'station-2'
   | 'station-3'
   | 'station-summary'
+  | 'light-heat-radiation'
   | 'atmospheric-conditions' 
   | 'data-visualization' 
   | 'atmosphere';
