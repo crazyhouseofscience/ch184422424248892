@@ -185,7 +185,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="hidden xl:inline text-xs text-amber-400 font-mono font-medium">· Virtual Station Investigation</span>
               </h1>
               <div className="text-[10px] text-slate-400 leading-none mt-0.5 hidden sm:block">
-                Designed by <span className="text-slate-300 font-semibold">Keith Chapman 2026 v1.2</span> using Google AI Studio
+                Designed by <span className="text-slate-300 font-semibold">Keith Chapman 2026 v1.2.1</span> using Google AI Studio
               </div>
             </div>
           </div>

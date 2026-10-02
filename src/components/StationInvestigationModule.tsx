@@ -27,7 +27,8 @@ import {
   VolumeX,
   Bell,
   LineChart,
-  BookOpen
+  BookOpen,
+  TrendingUp
 } from 'lucide-react';
 import { StationEquipmentSetup, StationProgress } from '../types';
 import { StationOverviewModal } from './StationOverviewModal';
