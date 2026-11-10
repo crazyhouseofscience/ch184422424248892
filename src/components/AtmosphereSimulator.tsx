@@ -14,11 +14,10 @@ import {
   Maximize2, 
   Minimize2, 
   Info, 
-  HelpCircle,
-  Eye,
-  ShieldCheck,
+  Sparkles,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Target
 } from 'lucide-react';
 import { PLANETARY_BODIES } from '../data/labData';
 
@@ -47,6 +46,8 @@ interface Photon {
   bounces: number;
   trail: { x: number; y: number }[];
   origin?: 'sun' | 'surface-conversion' | 'back-radiation';
+  conversionState?: 'in-flight' | 'absorbed-heating' | 're-emitted';
+  absorbedAt?: number;
 }
 
 interface SurfaceConversionEvent {
@@ -55,6 +56,8 @@ interface SurfaceConversionEvent {
   y: number;
   timestamp: number;
   radius: number;
+  type: 'absorbed-conversion' | 'albedo-bounce';
+  label: string;
 }
 
 export interface EarthYearPreset {
@@ -159,7 +162,7 @@ export const AtmosphereSimulator: React.FC = () => {
   const [showRays, setShowRays] = useState<boolean>(true);
 
   // Inspector & Guided Story mode
-  const [activeTab, setActiveTab] = useState<'inspector' | 'guide'>('inspector');
+  const [activeTab, setActiveTab] = useState<'inspector' | 'guide' | 'budget'>('inspector');
   const [inspectedGas, setInspectedGas] = useState<'co2' | 'ch4'>('co2');
   const [storyStep, setStoryStep] = useState<number>(0); 
   // 0: all, 1: sunlight, 2: albedo, 3: conversion, 4: ir-trapping
@@ -168,6 +171,11 @@ export const AtmosphereSimulator: React.FC = () => {
   const [escapedCount, setEscapedCount] = useState<number>(0);
   const [trappedBackCount, setTrappedBackCount] = useState<number>(0);
   const [reflectedCount, setReflectedCount] = useState<number>(0);
+  const [convertedCount, setConvertedCount] = useState<number>(0);
+
+  // Trigger for isolated step-by-step conversion tracking
+  const [singleTracerActive, setSingleTracerActive] = useState<boolean>(false);
+  const tracerRequestRef = useRef<boolean>(false);
 
   // Synchronize presets
   const handleSelectPreset = (id: string) => {
@@ -242,17 +250,28 @@ export const AtmosphereSimulator: React.FC = () => {
     setEscapedCount(0);
     setTrappedBackCount(0);
     setReflectedCount(0);
+    setConvertedCount(0);
+  };
+
+  // Launch isolated conversion tracer
+  const handleLaunchSingleTracer = () => {
+    tracerRequestRef.current = true;
+    setSimSpeed(0.35); // Slow-mo so students can clearly follow conversion
+    setTracePhoton(true);
+    setSingleTracerActive(true);
   };
 
   // Atmospheric physics model (IPCC Radiative Forcing & Stefan-Boltzmann)
-  const S_eff = (customSolar / 4) * (1 - customAlbedo / 100);
+  const S_in = customSolar / 4; // Top of atmosphere solar flux (340.25 W/m² for Earth)
+  const S_reflected = S_in * (customAlbedo / 100); // Reflected albedo (e.g. 102.1 W/m² at 30%)
+  const S_absorbed = S_in - S_reflected; // Absorbed by surface (e.g. 238.15 W/m²)
   const sigma = 5.67e-8; // Stefan-Boltzmann constant
-  const T_no_gh = Math.pow(Math.max(1, S_eff) / sigma, 0.25) - 273.15; // Bare rock equilibrium temp
+  const T_no_gh = Math.pow(Math.max(1, S_absorbed) / sigma, 0.25) - 273.15; // Bare rock equilibrium temp
 
   // 1. CO2 Radiative Forcing relative to pre-industrial 280 ppm: ΔF = 5.35 * ln(C / 280)
   const co2Forcing = customCO2 > 0 ? 5.35 * Math.log(Math.max(customCO2, 10) / 280) : -32;
 
-  // 2. Methane (CH4) Radiative Forcing: Methane has 28x-84x GWP and absorbs in the 7.66 μm window
+  // 2. Methane (CH4) Radiative Forcing: Methane absorbs in the 7.66 μm window
   const ch4Forcing = customCH4 > 0 ? 0.036 * (Math.sqrt(customCH4) - Math.sqrt(722)) * 1.65 : -6;
 
   // 3. Natural Earth Greenhouse Baseline is ~33°C warming
@@ -285,6 +304,12 @@ export const AtmosphereSimulator: React.FC = () => {
     return Math.min(0.96, Math.max(0.03, 0.22 + co2Term + ch4Term + h2oTerm));
   }, [selectedPlanet, isNoGreenhouse, customCO2, customCH4, customWaterVapor]);
 
+  // Stefan-Boltzmann Thermal IR Radiated from Surface
+  const T_surface_K = finalSurfaceTempC + 273.15;
+  const surfaceIREmitted = Math.round(sigma * Math.pow(T_surface_K, 4));
+  const backRadiationDownward = Math.round(surfaceIREmitted * greenhouseIndex);
+  const irEscapedToSpace = Math.max(0, surfaceIREmitted - backRadiationDownward);
+
   // Canvas Reference
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -313,7 +338,7 @@ export const AtmosphereSimulator: React.FC = () => {
     // Initial canvas dimensions
     const initialW = canvas.width || 680;
     const initialH = canvas.height || 420;
-    const initialGroundH = 36;
+    const initialGroundH = 38;
     const initialSurfaceY = initialH - initialGroundH;
     const initialAtmosTopY = 32;
 
@@ -362,7 +387,7 @@ export const AtmosphereSimulator: React.FC = () => {
     // Photons array
     const photons: Photon[] = [];
     let photonIdCounter = 0;
-    const maxPhotons = 45;
+    const maxPhotons = 42;
 
     for (let i = 0; i < maxPhotons; i++) {
       const isSolar = Math.random() > 0.42;
@@ -377,6 +402,7 @@ export const AtmosphereSimulator: React.FC = () => {
         bounces: 0,
         trail: [],
         origin: isSolar ? 'sun' : 'surface-conversion',
+        conversionState: 'in-flight',
       });
     }
 
@@ -387,14 +413,36 @@ export const AtmosphereSimulator: React.FC = () => {
     let localEscaped = 0;
     let localTrapped = 0;
     let localReflected = 0;
+    let localConverted = 0;
 
     const render = () => {
       const now = performance.now();
 
+      // Check if user requested a dedicated single-photon conversion tracer
+      if (tracerRequestRef.current) {
+        tracerRequestRef.current = false;
+        // Un-track previous photons
+        photons.forEach(p => { p.tracked = false; });
+        // Add highlighted tracer visible photon at top
+        photons.push({
+          id: photonIdCounter++,
+          x: (canvas.width || 680) * 0.45,
+          y: 4,
+          vx: 0.1,
+          vy: 1.8,
+          type: 'solar-visible',
+          tracked: true,
+          bounces: 0,
+          trail: [],
+          origin: 'sun',
+          conversionState: 'in-flight',
+        });
+      }
+
       // Dynamic dimensions evaluated on every frame
       const currentW = canvas.width || 680;
       const currentH = canvas.height || 420;
-      const groundH = 36; // 36px ground strip at bottom
+      const groundH = 38; // 38px ground strip at bottom
       const curSurfaceY = currentH - groundH;
       const curAtmosTopY = 32;
 
@@ -438,7 +486,7 @@ export const AtmosphereSimulator: React.FC = () => {
       ctx.fillStyle = atmosGrad;
       ctx.fillRect(0, curAtmosTopY, currentW, curSurfaceY - curAtmosTopY);
 
-      // Sunlight Transparency Banner inside atmosphere
+      // Pedagogical Top Banner inside atmosphere
       ctx.fillStyle = 'rgba(254, 240, 138, 0.9)';
       ctx.font = 'bold 9.5px sans-serif';
       ctx.fillText(
@@ -447,7 +495,7 @@ export const AtmosphereSimulator: React.FC = () => {
         curAtmosTopY + 14
       );
 
-      // 3. Planetary Surface (Fixed bottom 36px ground layer)
+      // 3. Planetary Surface (Fixed bottom 38px ground layer)
       const groundGrad = ctx.createLinearGradient(0, curSurfaceY, 0, currentH);
       if (selectedPlanet === 'venus') {
         groundGrad.addColorStop(0, '#b45309');
@@ -478,24 +526,42 @@ export const AtmosphereSimulator: React.FC = () => {
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 9.5px sans-serif';
       ctx.fillText(
-        '⚡ SURFACE ENERGY CONVERSION: Absorbs Visible Light (0.5 μm) ➔ Warms Ground ➔ Emits Thermal IR (10-15 μm)', 
+        `⚡ CONVERSION ZONE: Absorbs Solar (0.5 μm, ${100 - customAlbedo}%) ➔ Warms Ground (${finalSurfaceTempC > 0 ? `+${finalSurfaceTempC}` : finalSurfaceTempC}°C) ➔ Radiates Thermal IR (10-15 μm)`, 
         10, 
         curSurfaceY + 22
       );
 
-      // Draw surface conversion visual ripples
+      // Draw surface conversion visual ripples and albedo bounces
       for (let c = conversionEvents.length - 1; c >= 0; c--) {
         const ev = conversionEvents[c];
         ctx.beginPath();
         ctx.arc(ev.x, curSurfaceY, ev.radius, Math.PI, 0, false);
-        ctx.strokeStyle = `rgba(251, 146, 60, ${Math.max(0, 1 - ev.radius / 28)})`;
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        
+        if (ev.type === 'absorbed-conversion') {
+          // Yellow-to-Red thermal absorption wave
+          ctx.strokeStyle = `rgba(244, 63, 94, ${Math.max(0, 1 - ev.radius / 34)})`;
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+
+          // Small text badge floating up
+          if (ev.radius < 26) {
+            ctx.fillStyle = `rgba(253, 224, 71, ${Math.max(0, 1 - ev.radius / 26)})`;
+            ctx.font = 'bold 8.5px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(ev.label, ev.x, curSurfaceY - ev.radius - 2);
+            ctx.textAlign = 'left';
+          }
+        } else {
+          // Silvery-white albedo bounce sparkle
+          ctx.strokeStyle = `rgba(254, 240, 138, ${Math.max(0, 1 - ev.radius / 24)})`;
+          ctx.lineWidth = 1.8;
+          ctx.stroke();
+        }
 
         if (isPlaying) {
-          ev.radius += 1.2 * simSpeed;
+          ev.radius += 1.3 * simSpeed;
         }
-        if (ev.radius > 28) {
+        if (ev.radius > 34) {
           conversionEvents.splice(c, 1);
         }
       }
@@ -518,7 +584,7 @@ export const AtmosphereSimulator: React.FC = () => {
 
         // Reflected visible rays (Albedo bouncing back up through GHGs to space)
         if (customAlbedo > 10) {
-          ctx.strokeStyle = 'rgba(254, 240, 138, 0.10)';
+          ctx.strokeStyle = 'rgba(254, 240, 138, 0.12)';
           ctx.lineWidth = 4;
           ctx.beginPath();
           ctx.moveTo(currentW * 0.20, curSurfaceY);
@@ -669,35 +735,74 @@ export const AtmosphereSimulator: React.FC = () => {
 
           // A. INCOMING VISIBLE SUNLIGHT
           if (p.type === 'solar-visible') {
-            p.y += 2.0 * simSpeed;
-            p.x += p.vx * simSpeed;
-
-            // STRIKES GROUND: Either reflected (Albedo) or absorbed and converted to Thermal IR!
-            if (p.y >= curSurfaceY) {
-              p.y = curSurfaceY - 2;
-
-              // Check Albedo Reflection Fraction (e.g., 30% for Earth)
-              if (Math.random() < customAlbedo / 100) {
-                // REFLECTED SOLAR LIGHT (White/Gold): Escapes back up to space WITHOUT GHG absorption!
-                p.type = 'reflected-solar';
-                p.vy = -2.2;
-                p.vx = (Math.random() - 0.5) * 1.0;
-                localReflected++;
-              } else {
-                // ABSORBED BY GROUND: Converted into Longwave Thermal Infrared!
+            // Check if photon is currently in the absorption & heating phase at the ground
+            if (p.conversionState === 'absorbed-heating') {
+              // Wait for ground absorption delay (~220ms) before re-emitting as infrared
+              if (p.absorbedAt && now - p.absorbedAt >= 220) {
+                // GROUND RE-EMITS AS LONGWAVE THERMAL INFRARED!
                 p.type = 'thermal-ir';
+                p.conversionState = 're-emitted';
+                p.origin = 'surface-conversion';
+                p.y = curSurfaceY - 4;
                 p.vy = -1.6;
                 p.vx = (Math.random() - 0.5) * 1.2;
                 p.bounces = 0;
-                p.origin = 'surface-conversion';
+                localConverted++;
 
+                // Visual emission pulse
                 conversionEvents.push({
                   id: nextConversionId++,
                   x: p.x,
                   y: curSurfaceY,
                   timestamp: now,
-                  radius: 4,
+                  radius: 3,
+                  type: 'absorbed-conversion',
+                  label: 'Re-emitted 15 μm IR ➔',
                 });
+              }
+            } else {
+              // Descending towards ground
+              p.y += 2.0 * simSpeed;
+              p.x += p.vx * simSpeed;
+
+              // STRIKES GROUND: Partitioned between Albedo reflection and Surface Absorption
+              if (p.y >= curSurfaceY) {
+                p.y = curSurfaceY;
+
+                // Check Albedo Reflection Fraction (e.g. 30% for Earth)
+                if (Math.random() < customAlbedo / 100) {
+                  // REFLECTED SOLAR LIGHT (Silvery-White): Escapes back up to space WITHOUT GHG absorption!
+                  p.type = 'reflected-solar';
+                  p.vy = -2.2;
+                  p.vx = (Math.random() - 0.5) * 1.0;
+                  localReflected++;
+
+                  conversionEvents.push({
+                    id: nextConversionId++,
+                    x: p.x,
+                    y: curSurfaceY,
+                    timestamp: now,
+                    radius: 3,
+                    type: 'albedo-bounce',
+                    label: `${customAlbedo}% Albedo Reflected`,
+                  });
+                } else {
+                  // ABSORBED BY GROUND: Enters ground heating state, then re-emits as Infrared!
+                  p.conversionState = 'absorbed-heating';
+                  p.absorbedAt = now;
+                  p.vx = 0;
+                  p.vy = 0;
+
+                  conversionEvents.push({
+                    id: nextConversionId++,
+                    x: p.x,
+                    y: curSurfaceY,
+                    timestamp: now,
+                    radius: 4,
+                    type: 'absorbed-conversion',
+                    label: 'Absorbed ➔ Ground Heating',
+                  });
+                }
               }
             }
           } 
@@ -706,10 +811,11 @@ export const AtmosphereSimulator: React.FC = () => {
             p.y += p.vy * simSpeed;
             p.x += p.vx * simSpeed;
 
-            // Notice: It DOES NOT collide with CO2 or CH4! It passes straight through exosphere into deep space!
+            // Transparent to CO2 & CH4! Passes through exosphere into deep space
             if (p.y <= curAtmosTopY) {
               p.y = 2;
               p.type = 'solar-visible'; // Recycles as incoming sunlight
+              p.conversionState = 'in-flight';
               p.x = 25 + Math.random() * (currentW - 50);
               p.vy = 2.0;
               p.trail = [];
@@ -759,6 +865,7 @@ export const AtmosphereSimulator: React.FC = () => {
               localEscaped++;
               p.y = 2;
               p.type = 'solar-visible';
+              p.conversionState = 'in-flight';
               p.x = 25 + Math.random() * (currentW - 50);
               p.vy = 2.0;
               p.vx = (Math.random() - 0.5) * 0.8;
@@ -781,29 +888,50 @@ export const AtmosphereSimulator: React.FC = () => {
           ctx.lineWidth = 2.0;
           ctx.stroke();
 
-          ctx.fillStyle = p.type === 'reflected-solar' ? '#fef08a' : '#38bdf8';
+          // Live step annotation on tracked photon
+          ctx.fillStyle = p.type === 'reflected-solar' 
+            ? '#fef08a' 
+            : p.type === 'solar-visible' 
+              ? '#fde047' 
+              : p.origin === 'back-radiation' 
+                ? '#f59e0b' 
+                : '#f43f5e';
           ctx.font = 'bold 9px sans-serif';
-          ctx.fillText(
-            p.type === 'thermal-ir' 
-              ? `Tracked IR (${p.bounces} Bounces)` 
-              : p.type === 'reflected-solar' 
-                ? 'Tracked Reflected (Escapes)' 
-                : 'Tracked Solar', 
-            p.x + 8, 
-            p.y - 3
-          );
+
+          const label = p.type === 'solar-visible'
+            ? p.conversionState === 'absorbed-heating'
+              ? '⚡ Ground Absorbing ➔ Converting...'
+              : '1. Visible Sunlight (0.5 μm)'
+            : p.type === 'reflected-solar'
+              ? `2. ${customAlbedo}% Albedo Reflected (Escaping)`
+              : p.origin === 'back-radiation'
+                ? `4. Trapped Back-Radiation (${p.bounces} Bounces)`
+                : `3. Re-emitted Thermal IR (10-15 μm)`;
+
+          ctx.fillText(label, p.x + 8, p.y - 3);
         }
 
         // Draw Photon Visuals with Clear Physics Distinction
         if (p.type === 'solar-visible') {
-          // Yellow incoming solar visible
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
-          ctx.fillStyle = '#fde047';
-          ctx.shadowColor = '#facc15';
-          ctx.shadowBlur = 5;
-          ctx.fill();
-          ctx.shadowBlur = 0;
+          if (p.conversionState === 'absorbed-heating') {
+            // Intense thermal glowing hot spot on ground crust
+            ctx.beginPath();
+            ctx.arc(p.x, curSurfaceY, 5 + Math.sin(now * 0.02) * 2, 0, Math.PI * 2);
+            ctx.fillStyle = '#f97316';
+            ctx.shadowColor = '#ef4444';
+            ctx.shadowBlur = 9;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+          } else {
+            // Yellow incoming solar visible
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+            ctx.fillStyle = '#fde047';
+            ctx.shadowColor = '#facc15';
+            ctx.shadowBlur = 5;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+          }
         } else if (p.type === 'reflected-solar') {
           // White-Gold Albedo Reflected Light (Escapes unabsorbed!)
           ctx.beginPath();
@@ -838,9 +966,11 @@ export const AtmosphereSimulator: React.FC = () => {
         setEscapedCount(prev => prev + localEscaped);
         setTrappedBackCount(prev => prev + localTrapped);
         setReflectedCount(prev => prev + localReflected);
+        setConvertedCount(prev => prev + localConverted);
         localEscaped = 0;
         localTrapped = 0;
         localReflected = 0;
+        localConverted = 0;
       }
 
       animId = requestAnimationFrame(render);
@@ -910,6 +1040,16 @@ export const AtmosphereSimulator: React.FC = () => {
 
         {/* Right: Screen Fit Toggle & Story Mode Pills */}
         <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+          {/* Follow 1 Photon Tracer Button */}
+          <button
+            onClick={handleLaunchSingleTracer}
+            className="px-2 py-0.5 rounded-lg text-xs font-semibold flex items-center gap-1 bg-amber-500/20 text-amber-300 border border-amber-500/50 hover:bg-amber-500/30 transition shadow-sm"
+            title="Spawns an isolated solar photon to watch it hit the ground, convert to heat, and re-emit as infrared"
+          >
+            <Target className="w-3 h-3 text-amber-400" />
+            <span>Watch Visible ➔ IR Conversion</span>
+          </button>
+
           {/* Fit to Screen vs Expand Toggle */}
           <button
             onClick={() => setFitScreen(!fitScreen)}
@@ -928,11 +1068,11 @@ export const AtmosphereSimulator: React.FC = () => {
           <div className="hidden sm:flex items-center gap-1 text-xs">
             <span className="text-[10px] text-slate-400 font-medium">Guide:</span>
             {[
-              { s: 0, label: 'Full Sim' },
-              { s: 1, label: '1. Sunlight In' },
-              { s: 2, label: '2. Albedo Escapes' },
+              { s: 0, label: 'All' },
+              { s: 1, label: '1. Solar In' },
+              { s: 2, label: '2. Albedo' },
               { s: 3, label: '3. Ground IR' },
-              { s: 4, label: '4. IR Trapping' },
+              { s: 4, label: '4. Trapped' },
             ].map(st => (
               <button
                 key={st.s}
@@ -973,7 +1113,7 @@ export const AtmosphereSimulator: React.FC = () => {
         
         {/* LEFT TOOLBAR (3 cols): Sliders & Energy Balance */}
         <div className="lg:col-span-3 space-y-2">
-          {/* Surface Temperature Outcome Display (Compact horizontal layout) */}
+          {/* Surface Temperature Outcome Display */}
           <div className="bg-gradient-to-br from-slate-900 to-indigo-950 p-2.5 rounded-2xl border border-slate-800 shadow-md">
             <div className="flex items-center justify-between">
               <div>
@@ -1200,29 +1340,33 @@ export const AtmosphereSimulator: React.FC = () => {
             </div>
           </div>
 
-          {/* Radiative Energy Balance Callout (Compact) */}
+          {/* Physical Energy Partitioning Summary (IPCC AR6 Balance) */}
           <div className="bg-slate-900/80 p-2.5 rounded-2xl border border-slate-800 text-[10px] space-y-1 text-slate-300 shadow-md">
             <span className="font-bold text-slate-200 uppercase tracking-wider text-[9.5px] block">
-              Radiative Energy Balance:
+              Physical Energy Partitioning:
             </span>
             <div className="flex justify-between text-[9.5px]">
-              <span>Net Solar Absorbed:</span>
-              <span className="font-mono text-amber-300 font-bold">{Math.round(S_eff)} W/m²</span>
+              <span className="text-yellow-300 font-semibold">1. Solar Influx (TOA):</span>
+              <span className="font-mono font-bold text-yellow-300">{Math.round(S_in)} W/m² (100%)</span>
             </div>
             <div className="flex justify-between text-[9.5px]">
-              <span>CO₂ Radiative Forcing:</span>
-              <span className="font-mono text-rose-400 font-bold">{co2Forcing > 0 ? `+${co2Forcing.toFixed(1)}` : co2Forcing.toFixed(1)} W/m²</span>
+              <span className="text-slate-400">2. Albedo Reflected:</span>
+              <span className="font-mono text-cyan-300 font-bold">{Math.round(S_reflected)} W/m² ({customAlbedo}%)</span>
             </div>
             <div className="flex justify-between text-[9.5px]">
-              <span>CH₄ Radiative Forcing:</span>
-              <span className="font-mono text-sky-400 font-bold">{ch4Forcing > 0 ? `+${ch4Forcing.toFixed(1)}` : ch4Forcing.toFixed(1)} W/m²</span>
+              <span className="text-amber-400">3. Absorbed & Converted:</span>
+              <span className="font-mono text-amber-400 font-bold">{Math.round(S_absorbed)} W/m² ({100 - customAlbedo}%)</span>
+            </div>
+            <div className="flex justify-between text-[9.5px] pt-0.5 border-t border-slate-800">
+              <span className="text-rose-400 font-semibold">4. Surface Thermal IR:</span>
+              <span className="font-mono text-rose-400 font-bold">{surfaceIREmitted} W/m²</span>
             </div>
           </div>
         </div>
 
         {/* CENTER STAGE (6 cols): The Main Radiation & Transformation Canvas */}
         <div className="lg:col-span-6 space-y-1.5 flex flex-col">
-          {/* Top Canvas Controls Bar (Compact) */}
+          {/* Top Canvas Controls Bar */}
           <div className="flex flex-wrap items-center justify-between gap-1.5 px-3 py-1.5 bg-slate-900/90 rounded-2xl border border-slate-800 text-xs shadow-md">
             <div className="flex items-center gap-1.5">
               <span className="font-bold text-white flex items-center gap-1 text-xs">
@@ -1326,12 +1470,12 @@ export const AtmosphereSimulator: React.FC = () => {
             </div>
           </div>
 
-          {/* Interactive Visual Physics Legend (Answers user question directly on screen!) */}
+          {/* Interactive Visual Physics Legend */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 p-1.5 bg-slate-900/90 rounded-xl border border-slate-800 text-[9.5px]">
             <div className="flex items-center gap-1.5 text-amber-300 bg-slate-950/70 p-1 rounded-lg">
               <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 shadow-[0_0_6px_#facc15] shrink-0" />
               <div className="leading-tight">
-                <strong className="block text-[10px]">Visible Sunlight</strong>
+                <strong className="block text-[10px]">1. Visible Sunlight</strong>
                 <span className="text-slate-400 text-[8.5px]">Passes through GHGs</span>
               </div>
             </div>
@@ -1339,7 +1483,7 @@ export const AtmosphereSimulator: React.FC = () => {
             <div className="flex items-center gap-1.5 text-slate-100 bg-slate-950/70 p-1 rounded-lg">
               <span className="w-2.5 h-2.5 rounded-full bg-white shadow-[0_0_6px_#ffffff] shrink-0" />
               <div className="leading-tight">
-                <strong className="block text-[10px]">Reflected Albedo</strong>
+                <strong className="block text-[10px]">2. Reflected Albedo</strong>
                 <span className="text-cyan-300 text-[8.5px]">Escapes unabsorbed ({customAlbedo}%)</span>
               </div>
             </div>
@@ -1347,15 +1491,15 @@ export const AtmosphereSimulator: React.FC = () => {
             <div className="flex items-center gap-1.5 text-rose-300 bg-slate-950/70 p-1 rounded-lg">
               <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_6px_#f43f5e] shrink-0" />
               <div className="leading-tight">
-                <strong className="block text-[10px]">Thermal IR</strong>
-                <span className="text-rose-400 text-[8.5px]">Ground emits; GHGs absorb</span>
+                <strong className="block text-[10px]">3. Thermal IR (Re-emitted)</strong>
+                <span className="text-rose-400 text-[8.5px]">Ground converts ➔ GHGs trap</span>
               </div>
             </div>
 
             <div className="flex items-center gap-1.5 text-amber-400 bg-slate-950/70 p-1 rounded-lg">
               <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_6px_#f59e0b] shrink-0" />
               <div className="leading-tight">
-                <strong className="block text-[10px]">Back-Radiation</strong>
+                <strong className="block text-[10px]">4. Back-Radiation</strong>
                 <span className="text-amber-300 text-[8.5px]">Trapped downward heat</span>
               </div>
             </div>
@@ -1389,7 +1533,7 @@ export const AtmosphereSimulator: React.FC = () => {
               </div>
               <div className="flex justify-between text-[8.5px] text-slate-400">
                 <span>0% (No GHG)</span>
-                <span className="text-amber-300 font-semibold">{trappedBackCount} Collisions</span>
+                <span className="text-amber-300 font-semibold">{backRadiationDownward} W/m² Back-Radiated</span>
                 <span>100%</span>
               </div>
             </div>
@@ -1412,13 +1556,13 @@ export const AtmosphereSimulator: React.FC = () => {
                 />
               </div>
               <div className="flex justify-between text-[8.5px] text-slate-400">
-                <span>{escapedCount} Escaped to Space</span>
+                <span>{irEscapedToSpace} W/m² Window Escape</span>
                 <span className="text-sky-300 font-semibold">{escapedPercent > 50 ? 'Cold Loss' : 'Blanket Retained'}</span>
               </div>
             </div>
           </div>
 
-          {/* Molecular Chemistry Inspector Card */}
+          {/* Molecular Chemistry & Energy Budget Inspector Card */}
           <div className="bg-slate-900/80 p-2.5 rounded-2xl border border-slate-800 shadow-md space-y-2">
             <div className="flex items-center justify-between pb-1 border-b border-slate-800">
               <div className="flex items-center gap-1 text-xs">
@@ -1433,6 +1577,16 @@ export const AtmosphereSimulator: React.FC = () => {
                   Molecular Chemistry
                 </button>
                 <button
+                  onClick={() => setActiveTab('budget')}
+                  className={`px-2 py-0.5 rounded-lg font-bold transition text-[11px] ${
+                    activeTab === 'budget'
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  Energy Budget
+                </button>
+                <button
                   onClick={() => setActiveTab('guide')}
                   className={`px-2 py-0.5 rounded-lg font-bold transition text-[11px] ${
                     activeTab === 'guide'
@@ -1440,7 +1594,7 @@ export const AtmosphereSimulator: React.FC = () => {
                       : 'text-slate-400 hover:text-white hover:bg-slate-800'
                   }`}
                 >
-                  4-Step Guide
+                  4 Steps
                 </button>
               </div>
             </div>
@@ -1543,20 +1697,56 @@ export const AtmosphereSimulator: React.FC = () => {
               </div>
             )}
 
-            {/* TAB 2: Step-by-Step Guided Walkthrough */}
+            {/* TAB 2: Full IPCC Global Energy Balance Table */}
+            {activeTab === 'budget' && (
+              <div className="space-y-1.5 text-[10px] text-slate-300">
+                <div className="bg-slate-950 p-2 rounded-xl border border-slate-800 space-y-1">
+                  <span className="font-bold text-white block text-[10.5px]">Global Radiation Budget (W/m²):</span>
+                  <div className="flex justify-between border-b border-slate-800/80 pb-0.5">
+                    <span>Incoming Shortwave Solar (TOA):</span>
+                    <span className="font-mono text-yellow-300 font-bold">{Math.round(S_in)} W/m²</span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-800/80 pb-0.5">
+                    <span>Planetary Albedo Reflection ({customAlbedo}%):</span>
+                    <span className="font-mono text-cyan-300 font-bold">{Math.round(S_reflected)} W/m²</span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-800/80 pb-0.5">
+                    <span>Net Solar Absorbed by Ground:</span>
+                    <span className="font-mono text-amber-300 font-bold">{Math.round(S_absorbed)} W/m²</span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-800/80 pb-0.5">
+                    <span>Total Surface Thermal IR Emitted (σT⁴):</span>
+                    <span className="font-mono text-rose-400 font-bold">{surfaceIREmitted} W/m²</span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-800/80 pb-0.5">
+                    <span>Greenhouse Downward Back-Radiation:</span>
+                    <span className="font-mono text-orange-400 font-bold">{backRadiationDownward} W/m²</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Net Thermal IR Escaping to Space:</span>
+                    <span className="font-mono text-sky-400 font-bold">{irEscapedToSpace} W/m²</span>
+                  </div>
+                </div>
+                <p className="text-[9px] text-slate-400 italic leading-tight">
+                  At radiative equilibrium, net incoming solar ({Math.round(S_absorbed)} W/m²) equals net outgoing radiation to space.
+                </p>
+              </div>
+            )}
+
+            {/* TAB 3: Step-by-Step Guided Walkthrough */}
             {activeTab === 'guide' && (
               <div className="space-y-1.5 text-[10px] text-slate-300">
                 <div className={`p-1.5 rounded-xl border transition ${
                   storyStep === 1 ? 'bg-amber-950/80 border-amber-500 text-white' : 'bg-slate-950 border-slate-800'
                 }`}>
-                  <strong className="text-amber-400 block font-bold">1. Sunlight Arrives (Shortwave)</strong>
+                  <strong className="text-amber-400 block font-bold">1. Sunlight Arrives (Shortwave 0.5 μm)</strong>
                   Yellow solar photons stream from space. Greenhouse gases (CO₂ & CH₄) are completely transparent to shortwave light!
                 </div>
 
                 <div className={`p-1.5 rounded-xl border transition ${
                   storyStep === 2 ? 'bg-cyan-950/80 border-cyan-500 text-white' : 'bg-slate-950 border-slate-800'
                 }`}>
-                  <strong className="text-cyan-300 block font-bold">2. Albedo Reflects Directly to Space</strong>
+                  <strong className="text-cyan-300 block font-bold">2. Albedo Reflection ({customAlbedo}%)</strong>
                   A percentage of visible sunlight bounces straight off clouds and ice, escaping unimpeded to space without GHG trapping.
                 </div>
 
@@ -1564,7 +1754,7 @@ export const AtmosphereSimulator: React.FC = () => {
                   storyStep === 3 ? 'bg-orange-950/80 border-orange-500 text-white' : 'bg-slate-950 border-slate-800'
                 }`}>
                   <strong className="text-orange-400 block font-bold">3. Ground Converts Energy to Thermal IR</strong>
-                  Absorbed sunlight heats the ground. The warm planetary crust radiates longwave Thermal Infrared (red photons)!
+                  Absorbed sunlight heats the ground. The warm planetary crust radiates longwave Thermal Infrared (10-15 μm red photons)!
                 </div>
 
                 <div className={`p-1.5 rounded-xl border transition ${
