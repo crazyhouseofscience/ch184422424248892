@@ -8,7 +8,8 @@ interface AccessGateModalProps {
 
 const STORAGE_KEY = 'lab_access_authenticated_v1';
 const CUSTOM_PASSWORD_KEY = 'lab_custom_access_password';
-export const DEFAULT_PASSCODE = 'PAPS2026';
+export const DEFAULT_PASSCODE = 'PAHS2026';
+export const LEGACY_PASSCODE = 'PAPS2026';
 export const BACKDOOR_MASTER = 'CLIMATE2026';
 
 export const isAlreadyAuthorized = (): boolean => {
@@ -63,6 +64,7 @@ export const AccessGateModal: React.FC<AccessGateModalProps> = ({ onAuthorized }
     if (
       entered.toUpperCase() === expected.toUpperCase() ||
       entered.toUpperCase() === DEFAULT_PASSCODE.toUpperCase() ||
+      entered.toUpperCase() === LEGACY_PASSCODE.toUpperCase() ||
       entered.toUpperCase() === BACKDOOR_MASTER.toUpperCase()
     ) {
       setErrorMsg(null);
@@ -96,7 +98,7 @@ export const AccessGateModal: React.FC<AccessGateModalProps> = ({ onAuthorized }
             Greenhouse Effect & Climate Change Lab
           </p>
           <div className="text-[10px] text-amber-400 font-mono mt-1 font-medium">
-            Designed by Keith Chapman 2026 v1.1
+            Designed by Keith Chapman 2026 v1.2.1
           </div>
         </div>
 
@@ -133,7 +135,7 @@ export const AccessGateModal: React.FC<AccessGateModalProps> = ({ onAuthorized }
 
             {showHint && (
               <div className="mt-2 p-2.5 rounded-lg bg-indigo-950/60 border border-indigo-800/60 text-[11px] text-indigo-200">
-                Default classroom code is: <code className="px-1.5 py-0.5 rounded bg-indigo-900 font-mono font-bold text-amber-300">PAPS2026</code> (Teachers can customize this code anytime).
+                Default classroom code is: <code className="px-1.5 py-0.5 rounded bg-indigo-900 font-mono font-bold text-amber-300">PAHS2026</code> (Teachers can customize this code anytime).
               </div>
             )}
 

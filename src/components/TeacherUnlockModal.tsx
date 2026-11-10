@@ -298,7 +298,7 @@ export const TeacherUnlockModal: React.FC<TeacherUnlockModalProps> = ({
                 <button
                   type="button"
                   onClick={handleResetPasscodeDefault}
-                  title="Reset to PAPS2026"
+                  title="Reset to PAHS2026"
                   className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition cursor-pointer flex items-center gap-1"
                 >
                   <RotateCcw className="w-3 h-3 text-slate-400" />
