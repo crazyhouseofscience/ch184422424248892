@@ -19,7 +19,9 @@ import {
   HelpCircle,
   Zap,
   TrendingUp,
-  Maximize2
+  Maximize2,
+  Calendar,
+  History
 } from 'lucide-react';
 import { PLANETARY_BODIES } from '../data/labData';
 
@@ -58,9 +60,88 @@ interface SurfaceConversionEvent {
   radius: number;
 }
 
+export interface EarthYearPreset {
+  year: string;
+  shortLabel: string;
+  co2: number;
+  ch4: number;
+  period: string;
+  description: string;
+}
+
+export const EARTH_HISTORICAL_YEARS: EarthYearPreset[] = [
+  { 
+    year: '20,000 BCE', 
+    shortLabel: '20k BCE (Ice Age)', 
+    co2: 185, 
+    ch4: 350, 
+    period: 'Last Glacial Maximum',
+    description: 'Mile-thick continental ice sheets, sea level 120m lower, mean temp ~9°C colder.'
+  },
+  { 
+    year: '1750', 
+    shortLabel: '1750 (Pre-Ind)', 
+    co2: 280, 
+    ch4: 720, 
+    period: 'Pre-Industrial Baseline',
+    description: 'Stable Holocene agricultural climate baseline before widespread fossil fuel combustion.'
+  },
+  { 
+    year: '1960', 
+    shortLabel: '1960 (Keeling Start)', 
+    co2: 317, 
+    ch4: 1260, 
+    period: 'Early Post-War Boom',
+    description: 'Charles David Keeling begins continuous high-precision atmospheric CO₂ logging at Mauna Loa.'
+  },
+  { 
+    year: '1980', 
+    shortLabel: '1980', 
+    co2: 339, 
+    ch4: 1570, 
+    period: 'Late 20th Century',
+    description: 'Accelerating industrial emissions and early climate science consensus warnings.'
+  },
+  { 
+    year: '2000', 
+    shortLabel: '2000 (Millennium)', 
+    co2: 370, 
+    ch4: 1770, 
+    period: 'Turn of Millennium',
+    description: 'Rapid global economic expansion and worldwide fossil fuel combustion acceleration.'
+  },
+  { 
+    year: '2026', 
+    shortLabel: '2026 (Present Day)', 
+    co2: 425, 
+    ch4: 1925, 
+    period: 'Present Day Measurement',
+    description: 'Current real-time atmospheric milestone (>50% above pre-industrial levels).'
+  },
+  { 
+    year: '2050', 
+    shortLabel: '2050 (Mid-Century)', 
+    co2: 490, 
+    ch4: 2150, 
+    period: 'Mid-Century Trajectory',
+    description: 'Intermediate emissions path; intense Arctic sea ice loss and extreme weather frequency.'
+  },
+  { 
+    year: '2100', 
+    shortLabel: '2100 (High Emissions)', 
+    co2: 680, 
+    ch4: 3500, 
+    period: 'IPCC SSP5-8.5 Projection',
+    description: 'Unmitigated high emissions pathway leading to +3°C to +4.5°C global mean warming.'
+  },
+];
+
 export const AtmosphereSimulator: React.FC = () => {
   // Preset planetary body
   const [selectedPlanet, setSelectedPlanet] = useState<string>('earth-modern');
+
+  // Selected Earth Historical Year Preset
+  const [selectedYearPreset, setSelectedYearPreset] = useState<string>('2026');
 
   // Atmospheric gas concentrations (Separated CO2 and CH4)
   const [customCO2, setCustomCO2] = useState<number>(424); // ppm
@@ -129,6 +210,26 @@ export const AtmosphereSimulator: React.FC = () => {
       setCustomWaterVapor(0.0);
     }
     handleResetCounters();
+  };
+
+  const handleApplyYearPreset = (yearKey: string) => {
+    setSelectedYearPreset(yearKey);
+    const found = EARTH_HISTORICAL_YEARS.find(y => y.year === yearKey);
+    if (found) {
+      setCustomCO2(found.co2);
+      setCustomCH4(found.ch4);
+      setCustomSolar(1361);
+      setCustomAlbedo(yearKey === '20,000 BCE' ? 36 : 30);
+      setCustomWaterVapor(yearKey === '20,000 BCE' ? 0.7 : 1.0);
+      if (yearKey === '2100') {
+        setSelectedPlanet('earth-future');
+      } else if (yearKey === '1750') {
+        setSelectedPlanet('earth-preindustrial');
+      } else {
+        setSelectedPlanet('earth-modern');
+      }
+      handleResetCounters();
+    }
   };
 
   const handleResetCounters = () => {
@@ -836,6 +937,59 @@ export const AtmosphereSimulator: React.FC = () => {
               >
                 Reset Stats
               </button>
+            </div>
+
+            {/* Earth Historical Year Timeline Presets */}
+            <div className="bg-slate-950 p-2 rounded-xl border border-amber-500/30 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-amber-400" />
+                  Earth Historical Year Presets:
+                </span>
+                <span className="text-[9px] text-slate-400 font-mono">185 to 680 ppm</span>
+              </div>
+
+              <select
+                value={selectedYearPreset}
+                onChange={(e) => handleApplyYearPreset(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 hover:border-amber-400 rounded-lg px-2 py-1 text-xs text-white font-medium focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer transition"
+              >
+                {EARTH_HISTORICAL_YEARS.map(y => (
+                  <option key={y.year} value={y.year}>
+                    {y.shortLabel} · {y.co2} ppm CO₂ ({y.ch4} ppb CH₄)
+                  </option>
+                ))}
+              </select>
+
+              {/* Quick clickable era badges */}
+              <div className="grid grid-cols-4 gap-1 text-[9px] pt-0.5">
+                {[
+                  { y: '20,000 BCE', label: 'Ice Age' },
+                  { y: '1750', label: '1750 Pre-Ind' },
+                  { y: '1960', label: '1960 Keeling' },
+                  { y: '2026', label: '2026 Now' },
+                ].map(item => (
+                  <button
+                    key={item.y}
+                    type="button"
+                    onClick={() => handleApplyYearPreset(item.y)}
+                    className={`py-0.5 px-1 rounded text-center font-bold transition truncate ${
+                      selectedYearPreset === item.y
+                        ? 'bg-amber-500 text-slate-950 shadow-sm'
+                        : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Historical context note */}
+              {EARTH_HISTORICAL_YEARS.find(y => y.year === selectedYearPreset) && (
+                <div className="text-[9.5px] text-amber-200/90 leading-tight pt-1 border-t border-slate-800/80 italic">
+                  💡 {EARTH_HISTORICAL_YEARS.find(y => y.year === selectedYearPreset)?.description}
+                </div>
+              )}
             </div>
 
             {/* 1. CO2 Slider */}

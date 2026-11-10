@@ -14,6 +14,7 @@ import { DisplaySettingsModal, AppFontSize, AppTheme } from './components/Displa
 import { StandaloneDownloadModal } from './components/StandaloneDownloadModal';
 import { AccessGateModal, isAlreadyAuthorized, revokeAuthorization } from './components/AccessGateModal';
 import { PreLabGatingModal, isPreLabAlreadyCompleted, resetPreLabState } from './components/PreLabGatingModal';
+import { StationSelectionModal } from './components/StationSelectionModal';
 import { Sparkles, CheckCircle2, X, Unlock } from 'lucide-react';
 import { safeLocalStorage, safeSessionStorage } from './utils/storage';
 import { 
@@ -65,6 +66,15 @@ export default function App() {
   // Classroom Passcode Protection Gate
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return isAlreadyAuthorized();
+  });
+
+  // Station Selection Window (Appears immediately after passcode, or on clicking 'Opening Screen')
+  const [isStationSelectOpen, setIsStationSelectOpen] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const alreadyChosen = safeSessionStorage.getItem('lab_station_chosen_session');
+      return alreadyChosen !== 'true';
+    }
+    return true;
   });
 
   // Pre-Lab Reading & Handout Completion Gate
@@ -341,10 +351,12 @@ export default function App() {
         onLockApp={() => {
           revokeAuthorization();
           resetPreLabState();
+          safeSessionStorage.removeItem('lab_station_chosen_session');
           setIsAuthenticated(false);
           setIsPreLabCompleted(false);
+          setIsStationSelectOpen(true);
         }}
-        onReturnToOpeningScreen={() => setIsViewingOpeningScreen(true)}
+        onReturnToOpeningScreen={() => setIsStationSelectOpen(true)}
         graphIncrement={graphIncrement}
         onToggleGraphIncrement={handleToggleGraphIncrement}
         onNextSlide={handleNextSlide}
@@ -503,18 +515,24 @@ export default function App() {
 
       {/* Classroom Access Password Gate Modal */}
       {!isAuthenticated && (
-        <AccessGateModal onAuthorized={() => setIsAuthenticated(true)} />
+        <AccessGateModal 
+          onAuthorized={() => {
+            setIsAuthenticated(true);
+            setIsStationSelectOpen(true);
+          }} 
+        />
       )}
 
-      {/* Mandatory Pre-Lab Reading & Handout Gate Modal (Appears after password, or on clicking 'Opening Screen') */}
-      {isAuthenticated && (!isPreLabCompleted || isViewingOpeningScreen) && (
-        <PreLabGatingModal 
-          isOpen={true} 
-          onComplete={() => {
-            setIsPreLabCompleted(true);
-            setIsViewingOpeningScreen(false);
+      {/* Station Selection Window (Appears immediately after passcode, or on clicking 'Opening Screen') */}
+      {isAuthenticated && isStationSelectOpen && (
+        <StationSelectionModal
+          isOpen={true}
+          onSelectStation={(mod) => {
+            setActiveModule(mod);
+            setIsStationSelectOpen(false);
+            safeSessionStorage.setItem('lab_station_chosen_session', 'true');
           }}
-          onClose={isPreLabCompleted ? () => setIsViewingOpeningScreen(false) : undefined}
+          onClose={() => setIsStationSelectOpen(false)}
           isTeacherMode={isTeacherMode}
         />
       )}
