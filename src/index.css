@@ -12,6 +12,15 @@ code, kbd, samp, pre, .font-mono {
   font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+/* Hide scrollbars for clean educational UI */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* -------------------------------------------------------------
    Font Size Scaling & Readability
    ------------------------------------------------------------- */

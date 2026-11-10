@@ -178,18 +178,21 @@ export const AtmosphereSimulator: React.FC = () => {
       setCustomSolar(1361);
       setCustomAlbedo(30);
       setCustomWaterVapor(1.0);
+      setSelectedYearPreset('2026');
     } else if (id === 'earth-preindustrial') {
       setCustomCO2(280);
       setCustomCH4(720);
       setCustomSolar(1361);
       setCustomAlbedo(30);
       setCustomWaterVapor(1.0);
+      setSelectedYearPreset('1750');
     } else if (id === 'earth-future') {
       setCustomCO2(680);
       setCustomCH4(3500);
       setCustomSolar(1361);
       setCustomAlbedo(28);
       setCustomWaterVapor(1.15);
+      setSelectedYearPreset('2100');
     } else if (id === 'venus') {
       setCustomCO2(2000); // representative top value on slider
       setCustomCH4(50);
@@ -246,7 +249,6 @@ export const AtmosphereSimulator: React.FC = () => {
   const co2Forcing = customCO2 > 0 ? 5.35 * Math.log(Math.max(customCO2, 10) / 280) : -32;
 
   // 2. Methane (CH4) Radiative Forcing: Methane has 28x-84x GWP and absorbs in the 7.66 μm window
-  // Simplified IPCC formula: ΔF_CH4 ≈ 0.036 * (sqrt(M) - sqrt(722)) * potency factor
   const ch4Forcing = customCH4 > 0 ? 0.036 * (Math.sqrt(customCH4) - Math.sqrt(722)) * 1.65 : -6;
 
   // 3. Natural Earth Greenhouse Baseline is ~33°C warming
@@ -274,7 +276,6 @@ export const AtmosphereSimulator: React.FC = () => {
     if (isNoGreenhouse) return 0.02;
 
     const co2Term = Math.min(0.5, (customCO2 / 1000) * 0.34);
-    // Note: CH4 has higher per-molecule potency, factored in here
     const ch4Term = Math.min(0.35, (customCH4 / 5000) * 0.28);
     const h2oTerm = customWaterVapor * 0.35;
     return Math.min(0.96, Math.max(0.03, 0.22 + co2Term + ch4Term + h2oTerm));
@@ -291,26 +292,26 @@ export const AtmosphereSimulator: React.FC = () => {
     if (!ctx) return;
 
     let animId: number;
-    let width = canvas.width;
-    let height = canvas.height;
 
     // Responsive canvas resolution matching container size
     const resizeCanvas = () => {
       if (containerRef.current && canvas) {
         const rect = containerRef.current.getBoundingClientRect();
-        if (rect.width > 100 && rect.height > 100) {
+        if (rect.width > 50 && rect.height > 50) {
           canvas.width = Math.round(rect.width);
           canvas.height = Math.round(rect.height);
-          width = canvas.width;
-          height = canvas.height;
         }
       }
     };
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    const surfaceY = height - 42;
-    const atmosphereTopY = 44;
+    // Initial canvas dimensions
+    const initialW = canvas.width || 680;
+    const initialH = canvas.height || 540;
+    const initialGroundH = 44;
+    const initialSurfaceY = initialH - initialGroundH;
+    const initialAtmosTopY = 40;
 
     // Floating molecules in greenhouse layer
     const molecules: Molecule[] = [];
@@ -323,8 +324,8 @@ export const AtmosphereSimulator: React.FC = () => {
         molecules.push({
           id: molId++,
           type: 'co2',
-          x: 35 + Math.random() * (width - 70),
-          y: atmosphereTopY + 18 + Math.random() * (surfaceY - atmosphereTopY - 36),
+          x: 35 + Math.random() * (initialW - 70),
+          y: initialAtmosTopY + 18 + Math.random() * (initialSurfaceY - initialAtmosTopY - 36),
           vx: (Math.random() - 0.5) * 0.45,
           vy: (Math.random() - 0.5) * 0.35,
           rotation: Math.random() * Math.PI * 2,
@@ -341,8 +342,8 @@ export const AtmosphereSimulator: React.FC = () => {
         molecules.push({
           id: molId++,
           type: 'ch4',
-          x: 35 + Math.random() * (width - 70),
-          y: atmosphereTopY + 18 + Math.random() * (surfaceY - atmosphereTopY - 36),
+          x: 35 + Math.random() * (initialW - 70),
+          y: initialAtmosTopY + 18 + Math.random() * (initialSurfaceY - initialAtmosTopY - 36),
           vx: (Math.random() - 0.5) * 0.55,
           vy: (Math.random() - 0.5) * 0.45,
           rotation: Math.random() * Math.PI * 2,
@@ -363,8 +364,8 @@ export const AtmosphereSimulator: React.FC = () => {
       const isSolar = Math.random() > 0.45;
       photons.push({
         id: photonIdCounter++,
-        x: Math.random() * width,
-        y: isSolar ? Math.random() * (surfaceY - 20) : surfaceY - Math.random() * 100,
+        x: Math.random() * initialW,
+        y: isSolar ? Math.random() * (initialSurfaceY - 20) : initialSurfaceY - Math.random() * 100,
         vx: (Math.random() - 0.5) * 0.7,
         vy: isSolar ? 1.9 : -1.6,
         type: isSolar ? 'solar-visible' : 'thermal-ir',
@@ -384,14 +385,22 @@ export const AtmosphereSimulator: React.FC = () => {
 
     const render = () => {
       const now = performance.now();
-      ctx.clearRect(0, 0, width, height);
 
-      // 1. Deep Space (Top layer)
-      const spaceGrad = ctx.createLinearGradient(0, 0, 0, atmosphereTopY);
+      // DYNAMIC DIMENSIONS EVALUATED ON EVERY FRAME
+      const currentW = canvas.width || 680;
+      const currentH = canvas.height || 540;
+      const groundH = 44; // Fixed 44px ground layer at bottom
+      const curSurfaceY = currentH - groundH; // Ground line
+      const curAtmosTopY = 40; // Exosphere boundary line
+
+      ctx.clearRect(0, 0, currentW, currentH);
+
+      // 1. Deep Space (Top layer: 0 to curAtmosTopY)
+      const spaceGrad = ctx.createLinearGradient(0, 0, 0, curAtmosTopY);
       spaceGrad.addColorStop(0, '#020617');
       spaceGrad.addColorStop(1, '#090d16');
       ctx.fillStyle = spaceGrad;
-      ctx.fillRect(0, 0, width, atmosphereTopY);
+      ctx.fillRect(0, 0, currentW, curAtmosTopY);
 
       // Stars
       ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
@@ -400,40 +409,41 @@ export const AtmosphereSimulator: React.FC = () => {
       ctx.fillRect(280, 8, 1.5, 1.5);
       ctx.fillRect(420, 14, 2, 2);
       ctx.fillRect(560, 9, 1.5, 1.5);
+      ctx.fillRect(720, 16, 2, 2);
 
       // Top of atmosphere dashed boundary line
       ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
-      ctx.moveTo(0, atmosphereTopY);
-      ctx.lineTo(width, atmosphereTopY);
+      ctx.moveTo(0, curAtmosTopY);
+      ctx.lineTo(currentW, curAtmosTopY);
       ctx.stroke();
       ctx.setLineDash([]);
 
       ctx.fillStyle = '#38bdf8';
       ctx.font = 'bold 9px sans-serif';
-      ctx.fillText('EXOSPHERE BOUNDARY · ESCAPE TO DEEP SPACE', 10, atmosphereTopY - 5);
+      ctx.fillText('EXOSPHERE BOUNDARY · ESCAPE TO DEEP SPACE', 10, curAtmosTopY - 5);
 
-      // 2. Atmospheric Layer with Dynamic Thermal Blanket Glow
-      const atmosGrad = ctx.createLinearGradient(0, atmosphereTopY, 0, surfaceY);
+      // 2. Atmospheric Column Layer with Dynamic Thermal Blanket Glow (curAtmosTopY to curSurfaceY)
+      const atmosGrad = ctx.createLinearGradient(0, curAtmosTopY, 0, curSurfaceY);
       const glowAlpha = Math.min(0.48, 0.03 + greenhouseIndex * 0.45);
       atmosGrad.addColorStop(0, 'rgba(14, 165, 233, 0.08)');
       atmosGrad.addColorStop(0.5, `rgba(244, 63, 94, ${glowAlpha * 0.75})`);
       atmosGrad.addColorStop(1, `rgba(239, 68, 68, ${glowAlpha})`);
       ctx.fillStyle = atmosGrad;
-      ctx.fillRect(0, atmosphereTopY, width, surfaceY - atmosphereTopY);
+      ctx.fillRect(0, curAtmosTopY, currentW, curSurfaceY - curAtmosTopY);
 
       // Pedagogical Callout in Atmosphere Layer
       ctx.fillStyle = 'rgba(254, 240, 138, 0.85)';
       ctx.font = 'bold 10px sans-serif';
       ctx.fillText(
         '☀️ Incoming Visible Sunlight: Transparent to CO₂ & CH₄ (Passes through freely)', 
-        width / 2 - 210, 
-        atmosphereTopY + 16
+        Math.max(12, currentW / 2 - 200), 
+        curAtmosTopY + 16
       );
 
-      // 3. Planetary Surface (Ground)
-      const groundGrad = ctx.createLinearGradient(0, surfaceY, 0, height);
+      // 3. Planetary Surface (Fixed bottom 44px ground layer)
+      const groundGrad = ctx.createLinearGradient(0, curSurfaceY, 0, currentH);
       if (selectedPlanet === 'venus') {
         groundGrad.addColorStop(0, '#b45309');
         groundGrad.addColorStop(1, '#451a03');
@@ -448,14 +458,14 @@ export const AtmosphereSimulator: React.FC = () => {
         groundGrad.addColorStop(1, '#0f172a');
       }
       ctx.fillStyle = groundGrad;
-      ctx.fillRect(0, surfaceY, width, height - surfaceY);
+      ctx.fillRect(0, curSurfaceY, currentW, groundH);
 
       // Ground Top Line Highlight
       ctx.strokeStyle = selectedPlanet === 'venus' ? '#f59e0b' : selectedPlanet === 'mars' ? '#ef4444' : isNoGreenhouse ? '#f8fafc' : '#4ade80';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.moveTo(0, surfaceY);
-      ctx.lineTo(width, surfaceY);
+      ctx.moveTo(0, curSurfaceY);
+      ctx.lineTo(currentW, curSurfaceY);
       ctx.stroke();
       ctx.lineWidth = 1;
 
@@ -463,16 +473,16 @@ export const AtmosphereSimulator: React.FC = () => {
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 10px sans-serif';
       ctx.fillText(
-        '⚡ SURFACE ENERGY CONVERSION ZONE: Absorbs Visible Light (0.5 μm) ➔ Radiates Thermal Infrared (10-15 μm)', 
+        '⚡ SURFACE ENERGY CONVERSION: Absorbs Visible Light (0.5 μm) ➔ Radiates Thermal Infrared (10-15 μm)', 
         12, 
-        surfaceY + 22
+        curSurfaceY + 22
       );
 
       // Draw surface conversion visual ripples
       for (let c = conversionEvents.length - 1; c >= 0; c--) {
         const ev = conversionEvents[c];
         ctx.beginPath();
-        ctx.arc(ev.x, ev.y, ev.radius, Math.PI, 0, false); // Half circle expanding upward
+        ctx.arc(ev.x, curSurfaceY, ev.radius, Math.PI, 0, false);
         ctx.strokeStyle = `rgba(251, 146, 60, ${Math.max(0, 1 - ev.radius / 32)})`;
         ctx.lineWidth = 2;
         ctx.stroke();
@@ -491,13 +501,13 @@ export const AtmosphereSimulator: React.FC = () => {
         ctx.lineWidth = 8;
         ctx.beginPath();
         ctx.moveTo(30, 2);
-        ctx.lineTo(120, surfaceY);
+        ctx.lineTo(currentW * 0.18, curSurfaceY);
         ctx.moveTo(70, 2);
-        ctx.lineTo(260, surfaceY);
+        ctx.lineTo(currentW * 0.42, curSurfaceY);
         ctx.moveTo(110, 2);
-        ctx.lineTo(440, surfaceY);
+        ctx.lineTo(currentW * 0.68, curSurfaceY);
         ctx.moveTo(150, 2);
-        ctx.lineTo(width - 50, surfaceY);
+        ctx.lineTo(currentW * 0.92, curSurfaceY);
         ctx.stroke();
         ctx.lineWidth = 1;
       }
@@ -509,8 +519,8 @@ export const AtmosphereSimulator: React.FC = () => {
           mol.y += mol.vy * simSpeed;
           mol.rotation += mol.vRot * simSpeed;
 
-          if (mol.y < atmosphereTopY + 16 || mol.y > surfaceY - 20) mol.vy *= -1;
-          if (mol.x < 20 || mol.x > width - 20) mol.vx *= -1;
+          if (mol.y < curAtmosTopY + 16 || mol.y > curSurfaceY - 20) mol.vy *= -1;
+          if (mol.x < 20 || mol.x > currentW - 20) mol.vx *= -1;
         }
 
         const isVibrating = now < mol.vibratingUntil;
@@ -545,7 +555,6 @@ export const AtmosphereSimulator: React.FC = () => {
           // Carbon Dioxide: O = C = O (Linear Triatomic)
           const bondLength = 12;
 
-          // Dual covalent bonds
           ctx.strokeStyle = isVibrating ? '#f43f5e' : '#cbd5e1';
           ctx.lineWidth = 2.2;
           ctx.beginPath();
@@ -555,7 +564,7 @@ export const AtmosphereSimulator: React.FC = () => {
           ctx.lineTo(bondLength, 1.8);
           ctx.stroke();
 
-          // Central Carbon Atom (Black with 'C')
+          // Central Carbon Atom
           ctx.beginPath();
           ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
           ctx.fillStyle = isVibrating ? '#be123c' : '#1e293b';
@@ -570,7 +579,7 @@ export const AtmosphereSimulator: React.FC = () => {
           ctx.textBaseline = 'middle';
           ctx.fillText('C', 0, 0);
 
-          // Two Oxygen Atoms (Red with 'O')
+          // Two Oxygen Atoms
           [-bondLength, bondLength].forEach(oxX => {
             ctx.beginPath();
             ctx.arc(oxX, 0, 6, 0, Math.PI * 2);
@@ -584,7 +593,7 @@ export const AtmosphereSimulator: React.FC = () => {
             ctx.fillText('O', oxX, 0);
           });
         } else {
-          // Methane: CH4 (Tetrahedral with Central C and 4 H atoms)
+          // Methane: CH4 (Tetrahedral)
           const bondR = 10;
           ctx.strokeStyle = isVibrating ? '#38bdf8' : '#94a3b8';
           ctx.lineWidth = 1.8;
@@ -596,7 +605,6 @@ export const AtmosphereSimulator: React.FC = () => {
             ctx.lineTo(Math.cos(ang) * bondR, Math.sin(ang) * bondR);
             ctx.stroke();
 
-            // Hydrogen Sphere (Cyan/White with 'H')
             const hx = Math.cos(ang) * bondR;
             const hy = Math.sin(ang) * bondR;
             ctx.beginPath();
@@ -640,66 +648,58 @@ export const AtmosphereSimulator: React.FC = () => {
           }
 
           if (p.type === 'solar-visible') {
-            // Visible Solar: Streams downward toward surface
             p.y += 2.0 * simSpeed;
             p.x += p.vx * simSpeed;
 
             // STRIKES GROUND: Visible Light Transformed to Thermal Infrared!
-            if (p.y >= surfaceY) {
-              p.y = surfaceY - 2;
+            if (p.y >= curSurfaceY) {
+              p.y = curSurfaceY - 2;
 
-              // Check albedo reflection
               if (Math.random() < customAlbedo / 100) {
                 p.type = 'reflected-solar';
                 p.vy = -2.0;
                 p.vx = (Math.random() - 0.5) * 1.0;
               } else {
-                // VISIBLE ABSORBED -> CONVERTED TO THERMAL IR!
                 p.type = 'thermal-ir';
                 p.vy = -1.6;
                 p.vx = (Math.random() - 0.5) * 1.2;
                 p.bounces = 0;
                 p.origin = 'surface-conversion';
 
-                // Spawn conversion shockwave
                 conversionEvents.push({
                   id: nextConversionId++,
                   x: p.x,
-                  y: surfaceY,
+                  y: curSurfaceY,
                   timestamp: now,
                   radius: 4,
                 });
               }
             }
           } else if (p.type === 'reflected-solar') {
-            // Reflected visible light escapes to space untouched
             p.y += p.vy * simSpeed;
             p.x += p.vx * simSpeed;
 
             if (p.y <= 0) {
               p.y = 0;
               p.type = 'solar-visible';
-              p.x = 25 + Math.random() * (width - 50);
+              p.x = 25 + Math.random() * (currentW - 50);
               p.vy = 2.0;
             }
           } else {
-            // Thermal Infrared (Wavy rising / bouncing)
+            // Thermal Infrared
             p.y += p.vy * simSpeed;
             p.x += p.vx * simSpeed;
 
-            // Check collision with CO2 and CH4 molecules
-            if (molecules.length > 0 && p.y > atmosphereTopY + 8 && p.y < surfaceY - 10) {
+            // Collision with molecules
+            if (molecules.length > 0 && p.y > curAtmosTopY + 8 && p.y < curSurfaceY - 10) {
               for (const mol of molecules) {
                 const distSq = (p.x - mol.x) * (p.x - mol.x) + (p.y - mol.y) * (p.y - mol.y);
                 if (distSq < 280) {
-                  // Molecule absorbs the Thermal IR photon!
                   mol.vibratingUntil = now + 450;
                   mol.pulseRadius = 6;
                   p.bounces++;
                   localTrapped++;
 
-                  // Re-radiate in random isotropic direction!
-                  // CRITICAL: Roughly 50% are scattered BACK DOWN toward the ground!
                   const angle = Math.random() * Math.PI * 2;
                   const speed = 1.6;
                   p.vx = Math.cos(angle) * speed;
@@ -717,26 +717,26 @@ export const AtmosphereSimulator: React.FC = () => {
             }
 
             // Downward Back-radiation hits ground: Re-absorbed by Earth!
-            if (p.y >= surfaceY && p.vy > 0) {
-              p.y = surfaceY - 2;
+            if (p.y >= curSurfaceY && p.vy > 0) {
+              p.y = curSurfaceY - 2;
               p.vy = -1.5;
               p.vx = (Math.random() - 0.5) * 1.5;
             }
 
             // Reaches top of atmosphere: Escapes to Space!
-            if (p.y <= atmosphereTopY) {
+            if (p.y <= curAtmosTopY) {
               localEscaped++;
               p.y = 2;
               p.type = 'solar-visible';
-              p.x = 25 + Math.random() * (width - 50);
+              p.x = 25 + Math.random() * (currentW - 50);
               p.vy = 2.0;
               p.vx = (Math.random() - 0.5) * 0.8;
               p.trail = [];
             }
           }
 
-          if (p.x < 5) p.x = width - 8;
-          if (p.x > width - 5) p.x = 8;
+          if (p.x < 5) p.x = currentW - 8;
+          if (p.x > currentW - 5) p.x = 8;
         }
 
         // Draw Trails for Tracked Photon
@@ -774,7 +774,6 @@ export const AtmosphereSimulator: React.FC = () => {
           ctx.fillStyle = '#fef08a';
           ctx.fill();
         } else {
-          // Thermal IR
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.tracked ? 4.5 : 3.2, 0, Math.PI * 2);
           ctx.fillStyle = p.origin === 'back-radiation' ? '#f59e0b' : '#f43f5e';
@@ -825,10 +824,10 @@ export const AtmosphereSimulator: React.FC = () => {
   const escapedPercent = 100 - trappedPercent;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4.25rem)] min-h-[580px] overflow-hidden text-slate-100 select-none">
+    <div className="flex flex-col space-y-3 text-slate-100 select-none pb-4">
       {/* Top Bar: Compact Planet Presets & Story Navigation */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-900 border-b border-slate-800 shrink-0">
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+      <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-md">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-[11px] font-bold uppercase text-slate-400 mr-1 flex items-center gap-1 shrink-0">
             <Globe2 className="w-3.5 h-3.5 text-indigo-400" />
             Preset:
@@ -863,7 +862,7 @@ export const AtmosphereSimulator: React.FC = () => {
             { s: 0, label: 'Full Sim' },
             { s: 1, label: '1. Sunlight In' },
             { s: 2, label: '2. Ground Converts IR' },
-            { s: 3, label: '3. IR Trapping & Back-Rad' },
+            { s: 3, label: '3. IR Trapping' },
           ].map(st => (
             <button
               key={st.s}
@@ -894,13 +893,13 @@ export const AtmosphereSimulator: React.FC = () => {
         </div>
       </div>
 
-      {/* Main 3-Column Workstation Layout (Viewport Contained) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 flex-1 min-h-0 overflow-hidden divide-y lg:divide-y-0 lg:divide-x divide-slate-800">
+      {/* Main 3-Column Workstation Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 items-start">
         
         {/* LEFT TOOLBAR (3 cols): Sliders & Energy Balance */}
-        <div className="lg:col-span-3 bg-slate-950/70 p-3 sm:p-3.5 flex flex-col justify-between overflow-y-auto space-y-3">
+        <div className="lg:col-span-3 space-y-3">
           {/* Surface Temperature Outcome Display */}
-          <div className="bg-gradient-to-br from-slate-900 to-indigo-950 p-3 rounded-xl border border-slate-800 text-center shadow-md">
+          <div className="bg-gradient-to-br from-slate-900 to-indigo-950 p-3.5 rounded-2xl border border-slate-800 text-center shadow-md">
             <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">
               Equilibrium Surface Temperature
             </span>
@@ -911,7 +910,7 @@ export const AtmosphereSimulator: React.FC = () => {
               ({finalSurfaceTempF > 0 ? `+${finalSurfaceTempF}` : finalSurfaceTempF}°F)
             </div>
 
-            <div className="grid grid-cols-2 gap-1.5 mt-2 pt-2 border-t border-slate-800/80 text-[10px]">
+            <div className="grid grid-cols-2 gap-1.5 mt-2.5 pt-2 border-t border-slate-800/80 text-[10px]">
               <div className="bg-slate-900/80 p-1.5 rounded-lg border border-slate-800">
                 <span className="text-slate-400 block">No-GHG Temp:</span>
                 <span className="font-mono font-bold text-sky-300">{T_no_gh.toFixed(1)}°C</span>
@@ -924,8 +923,8 @@ export const AtmosphereSimulator: React.FC = () => {
           </div>
 
           {/* Interactive Gas Controls */}
-          <div className="space-y-3 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80">
-            <div className="flex items-center justify-between pb-1 border-b border-slate-800 text-xs font-bold text-slate-200 uppercase tracking-wider">
+          <div className="space-y-3 bg-slate-900/80 p-3 rounded-2xl border border-slate-800 shadow-md">
+            <div className="flex items-center justify-between pb-1.5 border-b border-slate-800 text-xs font-bold text-slate-200 uppercase tracking-wider">
               <span className="flex items-center gap-1.5">
                 <Sliders className="w-3.5 h-3.5 text-indigo-400" />
                 Gas Concentrations
@@ -940,7 +939,7 @@ export const AtmosphereSimulator: React.FC = () => {
             </div>
 
             {/* Earth Historical Year Timeline Presets */}
-            <div className="bg-slate-950 p-2 rounded-xl border border-amber-500/30 space-y-1.5">
+            <div className="bg-slate-950 p-2.5 rounded-xl border border-amber-500/30 space-y-1.5">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1">
                   <Calendar className="w-3.5 h-3.5 text-amber-400" />
@@ -1024,8 +1023,8 @@ export const AtmosphereSimulator: React.FC = () => {
               </div>
             </div>
 
-            {/* 2. Methane (CH4) Slider - Separate control & chemistry difference */}
-            <div className="space-y-1 pt-1 border-t border-slate-800/60">
+            {/* 2. Methane (CH4) Slider */}
+            <div className="space-y-1 pt-1.5 border-t border-slate-800/60">
               <div className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-sky-400 inline-block" />
@@ -1060,7 +1059,7 @@ export const AtmosphereSimulator: React.FC = () => {
             </div>
 
             {/* 3. Water Vapor Feedback & Cloud Albedo */}
-            <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800/60 text-[10px]">
+            <div className="grid grid-cols-2 gap-2 pt-1.5 border-t border-slate-800/60 text-[10px]">
               <div>
                 <div className="flex justify-between mb-0.5">
                   <span className="text-slate-400">Water Vapor:</span>
@@ -1095,7 +1094,7 @@ export const AtmosphereSimulator: React.FC = () => {
             </div>
 
             {/* 4. Solar Constant */}
-            <div className="pt-1 border-t border-slate-800/60 text-[10px]">
+            <div className="pt-1.5 border-t border-slate-800/60 text-[10px]">
               <div className="flex justify-between mb-0.5">
                 <span className="text-slate-400">Solar Irradiance (Orbit):</span>
                 <span className="font-mono font-bold text-yellow-300">{customSolar} W/m²</span>
@@ -1113,7 +1112,7 @@ export const AtmosphereSimulator: React.FC = () => {
           </div>
 
           {/* Radiative Forcing Breakdown Callout */}
-          <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 text-[11px] space-y-1 text-slate-300">
+          <div className="bg-slate-900/80 p-3 rounded-2xl border border-slate-800 text-[11px] space-y-1.5 text-slate-300 shadow-md">
             <span className="font-bold text-slate-200 uppercase tracking-wider text-[10px] block">
               Radiative Energy Balance:
             </span>
@@ -1133,9 +1132,9 @@ export const AtmosphereSimulator: React.FC = () => {
         </div>
 
         {/* CENTER STAGE (6 cols): The Main Radiation & Transformation Canvas */}
-        <div className="lg:col-span-6 flex flex-col h-full min-h-0 bg-slate-950 relative overflow-hidden">
+        <div className="lg:col-span-6 space-y-2 flex flex-col">
           {/* Top Canvas Controls Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-900/95 border-b border-slate-800 z-10 shrink-0 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-slate-900/90 rounded-2xl border border-slate-800 text-xs shadow-md">
             <div className="flex items-center gap-2">
               <span className="font-bold text-white flex items-center gap-1.5 text-xs">
                 <Activity className="w-3.5 h-3.5 text-rose-400" />
@@ -1144,10 +1143,10 @@ export const AtmosphereSimulator: React.FC = () => {
             </div>
 
             {/* Play/Pause & Speed Tools */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <button
                 onClick={() => setIsPlaying(!isPlaying)}
-                className={`px-2 py-0.5 rounded text-xs font-semibold flex items-center gap-1 transition ${
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
                   isPlaying ? 'bg-slate-800 text-slate-300 hover:text-white' : 'bg-emerald-600 text-white'
                 }`}
               >
@@ -1157,7 +1156,7 @@ export const AtmosphereSimulator: React.FC = () => {
 
               <button
                 onClick={() => setSimSpeed(prev => prev === 1.0 ? 0.35 : 1.0)}
-                className={`px-2 py-0.5 rounded text-[11px] font-semibold transition ${
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition ${
                   simSpeed === 0.35 ? 'bg-indigo-950 text-indigo-300 border border-indigo-600' : 'bg-slate-800 text-slate-400 hover:text-white'
                 }`}
                 title="Slow-motion enables easy observation of each photon hitting molecules and bouncing back down"
@@ -1167,7 +1166,7 @@ export const AtmosphereSimulator: React.FC = () => {
 
               <button
                 onClick={() => setTracePhoton(!tracePhoton)}
-                className={`px-2 py-0.5 rounded text-[11px] font-semibold transition ${
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition ${
                   tracePhoton ? 'bg-sky-950 text-sky-300 border border-sky-600' : 'bg-slate-800 text-slate-400'
                 }`}
               >
@@ -1176,7 +1175,7 @@ export const AtmosphereSimulator: React.FC = () => {
 
               <button
                 onClick={() => setShowRays(!showRays)}
-                className={`px-2 py-0.5 rounded text-[11px] font-semibold transition ${
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition ${
                   showRays ? 'bg-amber-950 text-amber-300 border border-amber-600' : 'bg-slate-800 text-slate-400'
                 }`}
               >
@@ -1185,15 +1184,18 @@ export const AtmosphereSimulator: React.FC = () => {
             </div>
           </div>
 
-          {/* Full-Height Responsive Canvas Viewport */}
-          <div ref={containerRef} className="flex-1 w-full h-full min-h-0 relative bg-slate-950 overflow-hidden">
+          {/* Full-Height Spacious Canvas Viewport (Fixed 560px-600px height for optimal view) */}
+          <div 
+            ref={containerRef} 
+            className="relative w-full h-[520px] sm:h-[560px] lg:h-[600px] rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-2xl"
+          >
             <canvas
               ref={canvasRef}
               className="w-full h-full block"
             />
 
             {/* Sun Badge (Top Left) */}
-            <div className="absolute top-2 left-2 bg-slate-900/85 border border-amber-500/50 rounded-lg px-2 py-1 flex items-center gap-1.5 text-amber-300 text-xs backdrop-blur-md shadow-md">
+            <div className="absolute top-2.5 left-2.5 bg-slate-900/85 border border-amber-500/50 rounded-xl px-2.5 py-1.5 flex items-center gap-2 text-amber-300 text-xs backdrop-blur-md shadow-lg">
               <Sun className="w-4 h-4 text-amber-400 animate-spin-slow shrink-0" />
               <div>
                 <span className="font-mono text-xs font-bold text-white leading-tight block">{customSolar} W/m²</span>
@@ -1202,7 +1204,7 @@ export const AtmosphereSimulator: React.FC = () => {
             </div>
 
             {/* Escaping to Space Badge (Top Right) */}
-            <div className="absolute top-2 right-2 bg-slate-900/85 border border-sky-500/50 rounded-lg px-2 py-1 flex items-center gap-1.5 text-sky-300 text-xs backdrop-blur-md shadow-md">
+            <div className="absolute top-2.5 right-2.5 bg-slate-900/85 border border-sky-500/50 rounded-xl px-2.5 py-1.5 flex items-center gap-2 text-sky-300 text-xs backdrop-blur-md shadow-lg">
               <div className="text-right">
                 <span className="font-mono text-xs font-bold text-sky-300 leading-tight block">{escapedPercent}%</span>
                 <span className="text-[9px] text-slate-400 leading-none block">Escaping to Deep Space</span>
@@ -1211,11 +1213,11 @@ export const AtmosphereSimulator: React.FC = () => {
             </div>
 
             {/* Molecule Filter Tabs on Canvas (Bottom Left) */}
-            <div className="absolute bottom-11 left-2 flex items-center gap-1 bg-slate-950/90 border border-slate-800 rounded-lg p-0.5 text-[10px] backdrop-blur-md">
+            <div className="absolute bottom-13 left-2.5 flex items-center gap-1 bg-slate-950/90 border border-slate-800 rounded-xl p-1 text-[10px] backdrop-blur-md shadow-md">
               <span className="text-slate-400 px-1 font-semibold">Filter:</span>
               <button
                 onClick={() => setMoleculeFilter('all')}
-                className={`px-1.5 py-0.5 rounded font-bold transition ${
+                className={`px-2 py-0.5 rounded-lg font-bold transition ${
                   moleculeFilter === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -1223,7 +1225,7 @@ export const AtmosphereSimulator: React.FC = () => {
               </button>
               <button
                 onClick={() => setMoleculeFilter('co2')}
-                className={`px-1.5 py-0.5 rounded font-bold transition ${
+                className={`px-2 py-0.5 rounded-lg font-bold transition ${
                   moleculeFilter === 'co2' ? 'bg-rose-600 text-white' : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -1231,7 +1233,7 @@ export const AtmosphereSimulator: React.FC = () => {
               </button>
               <button
                 onClick={() => setMoleculeFilter('ch4')}
-                className={`px-1.5 py-0.5 rounded font-bold transition ${
+                className={`px-2 py-0.5 rounded-lg font-bold transition ${
                   moleculeFilter === 'ch4' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -1240,7 +1242,7 @@ export const AtmosphereSimulator: React.FC = () => {
             </div>
 
             {/* Legend Overlay on Canvas (Bottom Right) */}
-            <div className="absolute bottom-11 right-2 bg-slate-950/90 border border-slate-800 rounded-lg p-1.5 text-[9px] space-y-0.5 backdrop-blur-md shadow-md">
+            <div className="absolute bottom-13 right-2.5 bg-slate-950/90 border border-slate-800 rounded-xl p-2 text-[9.5px] space-y-1 backdrop-blur-md shadow-md">
               <div className="flex items-center gap-1 text-yellow-300">
                 <span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" />
                 <span>Visible Solar (passes through GHG)</span>
@@ -1258,14 +1260,68 @@ export const AtmosphereSimulator: React.FC = () => {
         </div>
 
         {/* RIGHT TOOLBAR (3 cols): Chemistry Inspector & Absorption Gauges */}
-        <div className="lg:col-span-3 bg-slate-950/70 p-3 sm:p-3.5 flex flex-col justify-between overflow-y-auto space-y-3">
-          {/* Header & Tabs */}
-          <div>
+        <div className="lg:col-span-3 space-y-3">
+          {/* Real-Time Trapping & Escaping Gauges (Moved to top of right column for immediate visibility!) */}
+          <div className="space-y-2 bg-slate-900/80 p-3 rounded-2xl border border-slate-800 shadow-md">
+            <span className="font-bold text-slate-200 uppercase tracking-wider text-[10px] block">
+              Real-Time Atmospheric Energy Gauges:
+            </span>
+
+            {/* Trapped & Back-Radiated Bar */}
+            <div className="bg-slate-950 p-2.5 rounded-xl border border-rose-950 space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-rose-300 flex items-center gap-1">
+                  <Flame className="w-3.5 h-3.5 text-rose-400" />
+                  Thermal IR Trapped:
+                </span>
+                <span className="font-mono font-bold text-rose-400 text-sm">
+                  {trappedPercent}%
+                </span>
+              </div>
+              <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-amber-500 via-rose-500 to-red-600 transition-all duration-300"
+                  style={{ width: `${trappedPercent}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[9px] text-slate-400">
+                <span>0% (No GHG)</span>
+                <span className="text-amber-300 font-semibold">{trappedBackCount} Trapped & Scattered Down</span>
+                <span>100%</span>
+              </div>
+            </div>
+
+            {/* Escaping to Space Bar */}
+            <div className="bg-slate-950 p-2.5 rounded-xl border border-sky-950 space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-sky-300 flex items-center gap-1">
+                  <ArrowUp className="w-3.5 h-3.5 text-sky-400" />
+                  Thermal IR Escaping:
+                </span>
+                <span className="font-mono font-bold text-sky-400 text-sm">
+                  {escapedPercent}%
+                </span>
+              </div>
+              <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-blue-600 to-sky-400 transition-all duration-300"
+                  style={{ width: `${escapedPercent}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[9px] text-slate-400">
+                <span>{escapedCount} Escaped to Deep Space</span>
+                <span className="text-sky-300 font-semibold">{escapedPercent > 50 ? 'Cold Loss' : 'Blanket Retained'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Molecular Chemistry Inspector Card */}
+          <div className="bg-slate-900/80 p-3 rounded-2xl border border-slate-800 shadow-md space-y-2.5">
             <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
               <div className="flex items-center gap-1 text-xs">
                 <button
                   onClick={() => setActiveTab('inspector')}
-                  className={`px-2 py-1 rounded-lg font-bold transition ${
+                  className={`px-2.5 py-1 rounded-lg font-bold transition ${
                     activeTab === 'inspector'
                       ? 'bg-indigo-600 text-white'
                       : 'text-slate-400 hover:text-white hover:bg-slate-800'
@@ -1275,7 +1331,7 @@ export const AtmosphereSimulator: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setActiveTab('guide')}
-                  className={`px-2 py-1 rounded-lg font-bold transition ${
+                  className={`px-2.5 py-1 rounded-lg font-bold transition ${
                     activeTab === 'guide'
                       ? 'bg-indigo-600 text-white'
                       : 'text-slate-400 hover:text-white hover:bg-slate-800'
@@ -1288,9 +1344,9 @@ export const AtmosphereSimulator: React.FC = () => {
 
             {/* TAB 1: Molecular Chemistry & Wavelength Inspector */}
             {activeTab === 'inspector' && (
-              <div className="space-y-3 mt-2.5">
+              <div className="space-y-2.5">
                 {/* Molecule Switcher */}
-                <div className="grid grid-cols-2 gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs text-center font-bold">
+                <div className="grid grid-cols-2 gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs text-center font-bold">
                   <button
                     onClick={() => setInspectedGas('co2')}
                     className={`py-1 rounded-lg transition ${
@@ -1311,7 +1367,7 @@ export const AtmosphereSimulator: React.FC = () => {
 
                 {/* Animated Molecular Structure Card */}
                 {inspectedGas === 'co2' ? (
-                  <div className="bg-slate-900/80 p-3 rounded-xl border border-rose-900/40 space-y-2">
+                  <div className="bg-slate-950 p-3 rounded-xl border border-rose-900/40 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-white text-xs">Linear Triatomic (O = C = O)</span>
                       <span className="text-[10px] font-mono text-rose-300 font-bold bg-rose-950 px-1.5 py-0.2 rounded border border-rose-800">
@@ -1320,7 +1376,7 @@ export const AtmosphereSimulator: React.FC = () => {
                     </div>
 
                     {/* Diagram of CO2 */}
-                    <div className="h-16 bg-slate-950 rounded-lg flex items-center justify-center border border-slate-800 relative overflow-hidden">
+                    <div className="h-14 bg-slate-900 rounded-lg flex items-center justify-center border border-slate-800 relative overflow-hidden">
                       <div className="flex items-center gap-1">
                         <div className="w-7 h-7 rounded-full bg-rose-600 border border-red-400 flex items-center justify-center text-[10px] font-bold text-white shadow-md">
                           O
@@ -1344,7 +1400,7 @@ export const AtmosphereSimulator: React.FC = () => {
                     </p>
                   </div>
                 ) : (
-                  <div className="bg-slate-900/80 p-3 rounded-xl border border-sky-900/40 space-y-2">
+                  <div className="bg-slate-950 p-3 rounded-xl border border-sky-900/40 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-white text-xs">Tetrahedral (CH₄)</span>
                       <span className="text-[10px] font-mono text-sky-300 font-bold bg-sky-950 px-1.5 py-0.2 rounded border border-sky-800">
@@ -1353,21 +1409,21 @@ export const AtmosphereSimulator: React.FC = () => {
                     </div>
 
                     {/* Diagram of CH4 */}
-                    <div className="h-16 bg-slate-950 rounded-lg flex items-center justify-center border border-slate-800 relative overflow-hidden">
-                      <div className="relative w-16 h-14 flex items-center justify-center">
+                    <div className="h-14 bg-slate-900 rounded-lg flex items-center justify-center border border-slate-800 relative overflow-hidden">
+                      <div className="relative w-16 h-12 flex items-center justify-center">
                         <div className="w-7 h-7 rounded-full bg-slate-800 border-2 border-sky-400 flex items-center justify-center text-xs font-bold text-white z-10">
                           C
                         </div>
-                        <div className="absolute top-0 w-4 h-4 rounded-full bg-sky-100 border border-sky-500 flex items-center justify-center text-[8px] font-bold text-sky-900">
+                        <div className="absolute top-0 w-3.5 h-3.5 rounded-full bg-sky-100 border border-sky-500 flex items-center justify-center text-[7px] font-bold text-sky-900">
                           H
                         </div>
-                        <div className="absolute bottom-0 left-0 w-4 h-4 rounded-full bg-sky-100 border border-sky-500 flex items-center justify-center text-[8px] font-bold text-sky-900">
+                        <div className="absolute bottom-0 left-0 w-3.5 h-3.5 rounded-full bg-sky-100 border border-sky-500 flex items-center justify-center text-[7px] font-bold text-sky-900">
                           H
                         </div>
-                        <div className="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-sky-100 border border-sky-500 flex items-center justify-center text-[8px] font-bold text-sky-900">
+                        <div className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-sky-100 border border-sky-500 flex items-center justify-center text-[7px] font-bold text-sky-900">
                           H
                         </div>
-                        <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-sky-100 border border-sky-500 flex items-center justify-center text-[8px] font-bold text-sky-900">
+                        <div className="absolute top-0 right-0 w-3.5 h-3.5 rounded-full bg-sky-100 border border-sky-500 flex items-center justify-center text-[7px] font-bold text-sky-900">
                           H
                         </div>
                       </div>
@@ -1386,79 +1442,29 @@ export const AtmosphereSimulator: React.FC = () => {
 
             {/* TAB 2: Step-by-Step Guided Walkthrough */}
             {activeTab === 'guide' && (
-              <div className="space-y-2 mt-2 text-[11px] text-slate-300">
-                <div className={`p-2 rounded-lg border transition ${
-                  storyStep === 1 ? 'bg-amber-950/80 border-amber-500 text-white' : 'bg-slate-900/60 border-slate-800'
+              <div className="space-y-2 text-[11px] text-slate-300">
+                <div className={`p-2 rounded-xl border transition ${
+                  storyStep === 1 ? 'bg-amber-950/80 border-amber-500 text-white' : 'bg-slate-950 border-slate-800'
                 }`}>
                   <strong className="text-amber-400 block font-bold">1. Sunlight Arrives (Shortwave)</strong>
                   Yellow solar photons stream from space. The greenhouse gases (CO₂ & CH₄) are completely transparent to shortwave light!
                 </div>
 
-                <div className={`p-2 rounded-lg border transition ${
-                  storyStep === 2 ? 'bg-orange-950/80 border-orange-500 text-white' : 'bg-slate-900/60 border-slate-800'
+                <div className={`p-2 rounded-xl border transition ${
+                  storyStep === 2 ? 'bg-orange-950/80 border-orange-500 text-white' : 'bg-slate-950 border-slate-800'
                 }`}>
                   <strong className="text-orange-400 block font-bold">2. Ground Conversion to Thermal IR</strong>
                   The planetary ground absorbs incoming visible photons, warms up, and converts that energy into longwave Thermal Infrared (red rays)!
                 </div>
 
-                <div className={`p-2 rounded-lg border transition ${
-                  storyStep === 3 ? 'bg-rose-950/80 border-rose-500 text-white' : 'bg-slate-900/60 border-slate-800'
+                <div className={`p-2 rounded-xl border transition ${
+                  storyStep === 3 ? 'bg-rose-950/80 border-rose-500 text-white' : 'bg-slate-950 border-slate-800'
                 }`}>
                   <strong className="text-rose-400 block font-bold">3. IR Absorption & Downward Back-Radiation</strong>
                   Outgoing IR photons strike CO₂ and CH₄ molecules. The molecules vibrate and re-radiate ~50% BACK DOWN to the surface, trapping heat like an insulating blanket.
                 </div>
               </div>
             )}
-          </div>
-
-          {/* Real-Time Trapping & Escaping Gauges */}
-          <div className="space-y-2 pt-2 border-t border-slate-800">
-            {/* Trapped & Back-Radiated Bar */}
-            <div className="bg-slate-900/80 p-2.5 rounded-xl border border-rose-950 space-y-1">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-rose-300 flex items-center gap-1">
-                  <Flame className="w-3.5 h-3.5 text-rose-400" />
-                  Thermal IR Trapped:
-                </span>
-                <span className="font-mono font-bold text-rose-400 text-sm">
-                  {trappedPercent}%
-                </span>
-              </div>
-              <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-gradient-to-r from-amber-500 via-rose-500 to-red-600 transition-all duration-300"
-                  style={{ width: `${trappedPercent}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-[9px] text-slate-400">
-                <span>0% (No GHG)</span>
-                <span className="text-amber-300 font-semibold">{trappedBackCount} Collisions Trapped</span>
-                <span>100%</span>
-              </div>
-            </div>
-
-            {/* Escaping to Space Bar */}
-            <div className="bg-slate-900/80 p-2.5 rounded-xl border border-sky-950 space-y-1">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-sky-300 flex items-center gap-1">
-                  <ArrowUp className="w-3.5 h-3.5 text-sky-400" />
-                  Thermal IR Escaping:
-                </span>
-                <span className="font-mono font-bold text-sky-400 text-sm">
-                  {escapedPercent}%
-                </span>
-              </div>
-              <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-gradient-to-r from-blue-600 to-sky-400 transition-all duration-300"
-                  style={{ width: `${escapedPercent}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-[9px] text-slate-400">
-                <span>{escapedCount} Escaped to Space</span>
-                <span className="text-sky-300 font-semibold">{escapedPercent > 50 ? 'Cold Loss' : 'Blanket Retained'}</span>
-              </div>
-            </div>
           </div>
         </div>
       </div>
