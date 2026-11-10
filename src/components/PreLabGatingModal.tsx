@@ -72,10 +72,6 @@ export const PreLabGatingModal: React.FC<PreLabGatingModalProps> = ({
     studentName.trim().length > 0;
 
   const handleAdvance = () => {
-    if (!canAdvance && !isTeacherMode) {
-      setErrorMessage('Please enter your name and confirm you have completed the physical pre-lab handout.');
-      return;
-    }
     setPreLabCompletedState();
     onComplete();
   };
@@ -99,7 +95,7 @@ export const PreLabGatingModal: React.FC<PreLabGatingModalProps> = ({
                 <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/50">
                   Pre-Lab Gate · Required Reading
                 </span>
-                <span className="text-[10px] text-slate-400 font-mono">Keith Chapman 2026 v1.1</span>
+                <span className="text-[10px] text-slate-400 font-mono">Keith Chapman 2026 v1.2.1</span>
               </div>
               <h2 id="prelab-gate-title" className="text-base sm:text-lg font-bold text-white mt-0.5">
                 PART 1: Experimental Setup & Variable Identification
@@ -398,23 +394,30 @@ export const PreLabGatingModal: React.FC<PreLabGatingModalProps> = ({
 
         {/* Footer with Advance Button */}
         <div className="bg-slate-950 px-4 sm:px-6 py-3.5 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0">
-          <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
-            <Lock className="w-3.5 h-3.5 text-amber-400" />
-            <span>Station Access is locked until pre-lab requirements are satisfied</span>
+          <div className="text-[11px] text-emerald-400 flex items-center gap-1.5 font-medium">
+            <Unlock className="w-3.5 h-3.5 text-emerald-400" />
+            <span>All 8 laboratory modules unlocked for exploration</span>
           </div>
 
-          <button
-            onClick={handleAdvance}
-            disabled={!canAdvance && !isTeacherMode}
-            className={`px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 transition shadow-lg ${
-              canAdvance || isTeacherMode
-                ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20 cursor-pointer active:scale-95'
-                : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
-            }`}
-          >
-            <span>Proceed to Virtual Laboratory</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                setPreLabCompletedState();
+                onComplete();
+              }}
+              className="text-xs text-amber-300 hover:text-amber-200 underline font-semibold transition"
+            >
+              Skip to Laboratory Directly →
+            </button>
+
+            <button
+              onClick={handleAdvance}
+              className="px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 transition shadow-lg bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20 cursor-pointer active:scale-95"
+            >
+              <span>Proceed to Virtual Laboratory</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

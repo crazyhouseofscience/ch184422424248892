@@ -790,9 +790,9 @@ export const StationInvestigationModule: React.FC<StationInvestigationModuleProp
             <div className="grid grid-cols-4 gap-1 p-1 bg-slate-950 rounded-lg border border-slate-800 text-xs text-center font-medium">
               {[
                 { s: 1, label: '1. Clamp', valid: isStep1Complete, active: setupStep === 1 },
-                { s: 2, label: '2. Distance', valid: isStep2Complete, active: setupStep === 2, locked: !isStep1Complete && !isTeacherMode },
-                { s: 3, label: '3. Reactants', valid: isStep3Complete, active: setupStep === 3, locked: !isStep2Complete && !isTeacherMode },
-                { s: 4, label: '4. Seal', valid: isStep4Complete, active: setupStep === 4, locked: !isStep3Complete && !isTeacherMode },
+                { s: 2, label: '2. Distance', valid: isStep2Complete, active: setupStep === 2, locked: false },
+                { s: 3, label: '3. Reactants', valid: isStep3Complete, active: setupStep === 3, locked: false },
+                { s: 4, label: '4. Seal', valid: isStep4Complete, active: setupStep === 4, locked: false },
               ].map(item => (
                 <button
                   key={item.s}
@@ -1833,23 +1833,13 @@ export const StationInvestigationModule: React.FC<StationInvestigationModuleProp
 
               <button
                 onClick={onProceedToNext}
-                disabled={!isDataCollectionComplete && !isTeacherMode}
-                className={`py-1.5 px-4 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                  isDataCollectionComplete || isTeacherMode
-                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white shadow-md shadow-emerald-600/30'
-                    : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
-                }`}
+                className="py-1.5 px-4 rounded-lg text-xs font-bold transition flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white shadow-md shadow-emerald-600/30 cursor-pointer active:scale-95"
               >
                 <span>
                   {stationNumber === 1 && 'Advance to Station 2 (2 Tablets)'}
                   {stationNumber === 2 && 'Advance to Station 3 (4 Tablets)'}
                   {stationNumber === 3 && 'View 3-Station Comparative Summary'}
                 </span>
-                {isTeacherMode && !isDataCollectionComplete && (
-                  <span className="text-[9px] bg-purple-900/90 text-purple-200 px-1 py-0.2 rounded border border-purple-500/50 font-mono">
-                    Bypass
-                  </span>
-                )}
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>

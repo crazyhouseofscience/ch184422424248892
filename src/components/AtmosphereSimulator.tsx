@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Globe2, 
   Sun, 
@@ -10,361 +10,842 @@ import {
   ArrowDown, 
   ArrowUp, 
   Sliders, 
-  Eye
+  Eye,
+  Play,
+  Pause,
+  Activity,
+  CheckCircle2,
+  Atom,
+  HelpCircle,
+  Zap,
+  TrendingUp,
+  Maximize2
 } from 'lucide-react';
 import { PLANETARY_BODIES } from '../data/labData';
-import { PlanetaryAtmosphere } from '../types';
+
+interface Molecule {
+  id: number;
+  type: 'co2' | 'ch4';
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  rotation: number;
+  vRot: number;
+  vibratingUntil: number; // timestamp for absorption excitation vibration
+  pulseRadius: number; // expanding absorption wave ring
+  absorbedWavelength?: string; // '15 μm' or '7.66 μm'
+}
+
+interface Photon {
+  id: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  type: 'solar-visible' | 'thermal-ir' | 'reflected-solar';
+  tracked?: boolean;
+  bounces: number;
+  trail: { x: number; y: number }[];
+  origin?: 'sun' | 'surface-conversion' | 'back-radiation';
+}
+
+interface SurfaceConversionEvent {
+  id: number;
+  x: number;
+  y: number;
+  timestamp: number;
+  radius: number;
+}
 
 export const AtmosphereSimulator: React.FC = () => {
-  // Preset selection
+  // Preset planetary body
   const [selectedPlanet, setSelectedPlanet] = useState<string>('earth-modern');
 
-  // Interactive custom sliders
-  const [customCO2, setCustomCO2] = useState<number>(424);
-  const [customSolar, setCustomSolar] = useState<number>(1361);
+  // Atmospheric gas concentrations (Separated CO2 and CH4)
+  const [customCO2, setCustomCO2] = useState<number>(424); // ppm
+  const [customCH4, setCustomCH4] = useState<number>(1925); // ppb (Methane)
+  const [customWaterVapor, setCustomWaterVapor] = useState<number>(1.0); // 0.0 to 2.0x relative humidity feedback
+  const [customSolar, setCustomSolar] = useState<number>(1361); // W/m²
   const [customAlbedo, setCustomAlbedo] = useState<number>(30); // 30% Earth albedo
-  const [greenhouseStrength, setGreenhouseStrength] = useState<number>(1.0);
-  const [showPhotons, setShowPhotons] = useState<boolean>(true);
-  const [moleculeView, setMoleculeView] = useState<'co2' | 'h2o' | 'ch4'>('co2');
 
-  const currentPreset = PLANETARY_BODIES.find(p => p.id === selectedPlanet) || PLANETARY_BODIES[0];
+  // Simulation play controls
+  const [isPlaying, setIsPlaying] = useState<boolean>(true);
+  const [simSpeed, setSimSpeed] = useState<number>(1.0); // 0.35x slow-mo, 1.0x normal
+  const [tracePhoton, setTracePhoton] = useState<boolean>(true);
+  const [moleculeFilter, setMoleculeFilter] = useState<'all' | 'co2' | 'ch4'>('all');
+  const [showRays, setShowRays] = useState<boolean>(true);
 
+  // Inspector & Guided Story mode
+  const [activeTab, setActiveTab] = useState<'inspector' | 'guide'>('inspector');
+  const [inspectedGas, setInspectedGas] = useState<'co2' | 'ch4'>('co2');
+  const [storyStep, setStoryStep] = useState<number>(0); // 0: all, 1: sunlight, 2: conversion, 3: absorption, 4: back-radiation
+
+  // Real-time photon statistics counters
+  const [escapedCount, setEscapedCount] = useState<number>(0);
+  const [trappedBackCount, setTrappedBackCount] = useState<number>(0);
+
+  // Synchronize presets
   const handleSelectPreset = (id: string) => {
     setSelectedPlanet(id);
     const preset = PLANETARY_BODIES.find(p => p.id === id);
-    if (preset) {
-      setCustomCO2(preset.co2LevelPpm);
-      setCustomSolar(preset.solarIrradiance);
+    if (!preset) return;
+
+    if (id === 'earth-modern') {
+      setCustomCO2(424);
+      setCustomCH4(1925);
+      setCustomSolar(1361);
+      setCustomAlbedo(30);
+      setCustomWaterVapor(1.0);
+    } else if (id === 'earth-preindustrial') {
+      setCustomCO2(280);
+      setCustomCH4(720);
+      setCustomSolar(1361);
+      setCustomAlbedo(30);
+      setCustomWaterVapor(1.0);
+    } else if (id === 'earth-future') {
+      setCustomCO2(680);
+      setCustomCH4(3500);
+      setCustomSolar(1361);
+      setCustomAlbedo(28);
+      setCustomWaterVapor(1.15);
+    } else if (id === 'venus') {
+      setCustomCO2(2000); // representative top value on slider
+      setCustomCH4(50);
+      setCustomSolar(2614);
+      setCustomAlbedo(75);
+      setCustomWaterVapor(0.1);
+    } else if (id === 'mars') {
+      setCustomCO2(200); // 0.006 atm column density
+      setCustomCH4(10);
+      setCustomSolar(589);
+      setCustomAlbedo(25);
+      setCustomWaterVapor(0.05);
+    } else if (id === 'earth-nogreenhouse') {
+      setCustomCO2(0);
+      setCustomCH4(0);
+      setCustomSolar(1361);
+      setCustomAlbedo(30);
+      setCustomWaterVapor(0.0);
     }
+    handleResetCounters();
   };
 
-  // Atmospheric physics calculation:
-  // Effective incoming solar: S_eff = (Solar / 4) * (1 - albedo)
-  // Greenhouse forcing: Delta F = 5.35 * ln(C / 280) + base_natural_greenhouse
-  // T_effective = (S_eff / sigma)^0.25 - 273.15
-  const S_eff = (customSolar / 4) * (1 - customAlbedo / 100);
-  const sigma = 5.67e-8;
-  const T_no_gh = Math.pow(S_eff / sigma, 0.25) - 273.15;
+  const handleResetCounters = () => {
+    setEscapedCount(0);
+    setTrappedBackCount(0);
+  };
 
-  // Radiative forcing from CO2 relative to 280 ppm
-  const logRatio = customCO2 > 0 ? Math.log(Math.max(customCO2, 10) / 280) : -5;
-  const co2Forcing = 5.35 * logRatio; // W/m2
+  // Atmospheric physics model (IPCC Radiative Forcing & Stefan-Boltzmann)
+  const S_eff = (customSolar / 4) * (1 - customAlbedo / 100);
+  const sigma = 5.67e-8; // Stefan-Boltzmann constant
+  const T_no_gh = Math.pow(Math.max(1, S_eff) / sigma, 0.25) - 273.15; // Bare rock equilibrium temp
+
+  // 1. CO2 Radiative Forcing relative to pre-industrial 280 ppm: ΔF = 5.35 * ln(C / 280)
+  const co2Forcing = customCO2 > 0 ? 5.35 * Math.log(Math.max(customCO2, 10) / 280) : -32;
+
+  // 2. Methane (CH4) Radiative Forcing: Methane has 28x-84x GWP and absorbs in the 7.66 μm window
+  // Simplified IPCC formula: ΔF_CH4 ≈ 0.036 * (sqrt(M) - sqrt(722)) * potency factor
+  const ch4Forcing = customCH4 > 0 ? 0.036 * (Math.sqrt(customCH4) - Math.sqrt(722)) * 1.65 : -6;
+
+  // 3. Natural Earth Greenhouse Baseline is ~33°C warming
+  const isNoGreenhouse = selectedPlanet === 'earth-nogreenhouse' || (customCO2 === 0 && customCH4 === 0 && customWaterVapor === 0);
+  const baseNaturalGHE = isNoGreenhouse ? 0 : 33.0 * customWaterVapor;
+
+  // Climate sensitivity parameter λ ~ 0.75 °C / (W/m²)
+  const totalAnthropogenicWarming = Math.max(0, (co2Forcing + ch4Forcing) * 0.75 * (customWaterVapor || 0.5));
   
-  // Natural greenhouse effect baseline is ~33°C on Earth with ~150 W/m2 back radiation
-  const naturalGHE = selectedPlanet === 'earth-nogreenhouse' ? 0 : 32.0;
   const totalWarming = selectedPlanet === 'venus' 
     ? 507 
     : selectedPlanet === 'mars' 
       ? 5 
-      : selectedPlanet === 'earth-nogreenhouse'
-        ? 0
-        : Math.max(0, naturalGHE + co2Forcing * 0.75 * greenhouseStrength);
+      : isNoGreenhouse 
+        ? 0 
+        : Math.max(0, baseNaturalGHE + totalAnthropogenicWarming);
 
   const finalSurfaceTempC = Number((T_no_gh + totalWarming).toFixed(1));
   const finalSurfaceTempF = Number(((finalSurfaceTempC * 9) / 5 + 32).toFixed(1));
 
-  // Canvas ref for animated photon particles
+  // Trapping ratio (0% to ~98%)
+  const greenhouseIndex = useMemo(() => {
+    if (selectedPlanet === 'venus') return 0.98;
+    if (selectedPlanet === 'mars') return 0.08;
+    if (isNoGreenhouse) return 0.02;
+
+    const co2Term = Math.min(0.5, (customCO2 / 1000) * 0.34);
+    // Note: CH4 has higher per-molecule potency, factored in here
+    const ch4Term = Math.min(0.35, (customCH4 / 5000) * 0.28);
+    const h2oTerm = customWaterVapor * 0.35;
+    return Math.min(0.96, Math.max(0.03, 0.22 + co2Term + ch4Term + h2oTerm));
+  }, [selectedPlanet, isNoGreenhouse, customCO2, customCH4, customWaterVapor]);
+
+  // Canvas Reference
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!showPhotons) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    let animationFrameId: number;
-    const width = canvas.width;
-    const height = canvas.height;
+    let animId: number;
+    let width = canvas.width;
+    let height = canvas.height;
 
-    // Photons state: visible (incoming sun) and infrared (outgoing earth / trapped)
-    interface Photon {
-      x: number;
-      y: number;
-      vx: number;
-      vy: number;
-      type: 'solar-visible' | 'thermal-ir' | 'reflected-solar';
-      trappedCount: number;
+    // Responsive canvas resolution matching container size
+    const resizeCanvas = () => {
+      if (containerRef.current && canvas) {
+        const rect = containerRef.current.getBoundingClientRect();
+        if (rect.width > 100 && rect.height > 100) {
+          canvas.width = Math.round(rect.width);
+          canvas.height = Math.round(rect.height);
+          width = canvas.width;
+          height = canvas.height;
+        }
+      }
+    };
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    const surfaceY = height - 42;
+    const atmosphereTopY = 44;
+
+    // Floating molecules in greenhouse layer
+    const molecules: Molecule[] = [];
+    const co2Count = Math.max(0, Math.min(42, Math.round((customCO2 / 2000) * 34) + (customCO2 > 50 ? 4 : 0)));
+    const ch4Count = Math.max(0, Math.min(28, Math.round((customCH4 / 5000) * 22) + (customCH4 > 100 ? 3 : 0)));
+
+    let molId = 0;
+    if (moleculeFilter === 'all' || moleculeFilter === 'co2') {
+      for (let i = 0; i < co2Count; i++) {
+        molecules.push({
+          id: molId++,
+          type: 'co2',
+          x: 35 + Math.random() * (width - 70),
+          y: atmosphereTopY + 18 + Math.random() * (surfaceY - atmosphereTopY - 36),
+          vx: (Math.random() - 0.5) * 0.45,
+          vy: (Math.random() - 0.5) * 0.35,
+          rotation: Math.random() * Math.PI * 2,
+          vRot: (Math.random() - 0.5) * 0.025,
+          vibratingUntil: 0,
+          pulseRadius: 0,
+          absorbedWavelength: '15 μm',
+        });
+      }
     }
 
+    if (moleculeFilter === 'all' || moleculeFilter === 'ch4') {
+      for (let i = 0; i < ch4Count; i++) {
+        molecules.push({
+          id: molId++,
+          type: 'ch4',
+          x: 35 + Math.random() * (width - 70),
+          y: atmosphereTopY + 18 + Math.random() * (surfaceY - atmosphereTopY - 36),
+          vx: (Math.random() - 0.5) * 0.55,
+          vy: (Math.random() - 0.5) * 0.45,
+          rotation: Math.random() * Math.PI * 2,
+          vRot: (Math.random() - 0.5) * 0.035,
+          vibratingUntil: 0,
+          pulseRadius: 0,
+          absorbedWavelength: '7.66 μm',
+        });
+      }
+    }
+
+    // Photons
     const photons: Photon[] = [];
-    const maxPhotons = 70;
+    let photonIdCounter = 0;
+    const maxPhotons = 50;
 
     for (let i = 0; i < maxPhotons; i++) {
+      const isSolar = Math.random() > 0.45;
       photons.push({
+        id: photonIdCounter++,
         x: Math.random() * width,
-        y: Math.random() * height,
-        vx: (Math.random() - 0.5) * 0.8,
-        vy: Math.random() > 0.4 ? 1.5 : -1.2,
-        type: Math.random() > 0.5 ? 'solar-visible' : 'thermal-ir',
-        trappedCount: 0,
+        y: isSolar ? Math.random() * (surfaceY - 20) : surfaceY - Math.random() * 100,
+        vx: (Math.random() - 0.5) * 0.7,
+        vy: isSolar ? 1.9 : -1.6,
+        type: isSolar ? 'solar-visible' : 'thermal-ir',
+        tracked: i === 0 && tracePhoton,
+        bounces: 0,
+        trail: [],
+        origin: isSolar ? 'sun' : 'surface-conversion',
       });
     }
 
+    // Surface Conversion visual shockwaves (when visible light converts to IR)
+    const conversionEvents: SurfaceConversionEvent[] = [];
+    let nextConversionId = 0;
+
+    let localEscaped = 0;
+    let localTrapped = 0;
+
     const render = () => {
+      const now = performance.now();
       ctx.clearRect(0, 0, width, height);
 
-      // Draw atmosphere layer gradient
-      const grad = ctx.createLinearGradient(0, 0, 0, height);
-      grad.addColorStop(0, 'rgba(15, 23, 42, 0.2)');
-      grad.addColorStop(0.5, 'rgba(56, 189, 248, 0.08)');
-      grad.addColorStop(0.85, 'rgba(239, 68, 68, 0.05)');
-      grad.addColorStop(1, 'rgba(30, 41, 59, 0.4)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, width, height);
+      // 1. Deep Space (Top layer)
+      const spaceGrad = ctx.createLinearGradient(0, 0, 0, atmosphereTopY);
+      spaceGrad.addColorStop(0, '#020617');
+      spaceGrad.addColorStop(1, '#090d16');
+      ctx.fillStyle = spaceGrad;
+      ctx.fillRect(0, 0, width, atmosphereTopY);
 
-      // Draw planet surface line
-      ctx.fillStyle = selectedPlanet === 'venus' ? '#78350f' : selectedPlanet === 'mars' ? '#991b1b' : '#15803d';
-      ctx.fillRect(0, height - 35, width, 35);
+      // Stars
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.fillRect(40, 10, 1.5, 1.5);
+      ctx.fillRect(160, 18, 2, 2);
+      ctx.fillRect(280, 8, 1.5, 1.5);
+      ctx.fillRect(420, 14, 2, 2);
+      ctx.fillRect(560, 9, 1.5, 1.5);
 
-      // Label surface
+      // Top of atmosphere dashed boundary line
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(0, atmosphereTopY);
+      ctx.lineTo(width, atmosphereTopY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = '#38bdf8';
+      ctx.font = 'bold 9px sans-serif';
+      ctx.fillText('EXOSPHERE BOUNDARY · ESCAPE TO DEEP SPACE', 10, atmosphereTopY - 5);
+
+      // 2. Atmospheric Layer with Dynamic Thermal Blanket Glow
+      const atmosGrad = ctx.createLinearGradient(0, atmosphereTopY, 0, surfaceY);
+      const glowAlpha = Math.min(0.48, 0.03 + greenhouseIndex * 0.45);
+      atmosGrad.addColorStop(0, 'rgba(14, 165, 233, 0.08)');
+      atmosGrad.addColorStop(0.5, `rgba(244, 63, 94, ${glowAlpha * 0.75})`);
+      atmosGrad.addColorStop(1, `rgba(239, 68, 68, ${glowAlpha})`);
+      ctx.fillStyle = atmosGrad;
+      ctx.fillRect(0, atmosphereTopY, width, surfaceY - atmosphereTopY);
+
+      // Pedagogical Callout in Atmosphere Layer
+      ctx.fillStyle = 'rgba(254, 240, 138, 0.85)';
+      ctx.font = 'bold 10px sans-serif';
+      ctx.fillText(
+        '☀️ Incoming Visible Sunlight: Transparent to CO₂ & CH₄ (Passes through freely)', 
+        width / 2 - 210, 
+        atmosphereTopY + 16
+      );
+
+      // 3. Planetary Surface (Ground)
+      const groundGrad = ctx.createLinearGradient(0, surfaceY, 0, height);
+      if (selectedPlanet === 'venus') {
+        groundGrad.addColorStop(0, '#b45309');
+        groundGrad.addColorStop(1, '#451a03');
+      } else if (selectedPlanet === 'mars') {
+        groundGrad.addColorStop(0, '#b91c1c');
+        groundGrad.addColorStop(1, '#7f1d1d');
+      } else if (isNoGreenhouse) {
+        groundGrad.addColorStop(0, '#e2e8f0'); // Snowball Earth
+        groundGrad.addColorStop(1, '#94a3b8');
+      } else {
+        groundGrad.addColorStop(0, '#15803d'); // Earth greenery & oceans
+        groundGrad.addColorStop(1, '#0f172a');
+      }
+      ctx.fillStyle = groundGrad;
+      ctx.fillRect(0, surfaceY, width, height - surfaceY);
+
+      // Ground Top Line Highlight
+      ctx.strokeStyle = selectedPlanet === 'venus' ? '#f59e0b' : selectedPlanet === 'mars' ? '#ef4444' : isNoGreenhouse ? '#f8fafc' : '#4ade80';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(0, surfaceY);
+      ctx.lineTo(width, surfaceY);
+      ctx.stroke();
+      ctx.lineWidth = 1;
+
+      // Surface Conversion Callout on Ground
       ctx.fillStyle = '#ffffff';
-      ctx.font = '11px sans-serif';
-      ctx.fillText('Planetary Surface Absorbing Energy', 15, height - 12);
+      ctx.font = 'bold 10px sans-serif';
+      ctx.fillText(
+        '⚡ SURFACE ENERGY CONVERSION ZONE: Absorbs Visible Light (0.5 μm) ➔ Radiates Thermal Infrared (10-15 μm)', 
+        12, 
+        surfaceY + 22
+      );
 
-      // Update and draw photons
-      const co2DensityFactor = Math.min(1.0, (customCO2 / 1000) * greenhouseStrength);
+      // Draw surface conversion visual ripples
+      for (let c = conversionEvents.length - 1; c >= 0; c--) {
+        const ev = conversionEvents[c];
+        ctx.beginPath();
+        ctx.arc(ev.x, ev.y, ev.radius, Math.PI, 0, false); // Half circle expanding upward
+        ctx.strokeStyle = `rgba(251, 146, 60, ${Math.max(0, 1 - ev.radius / 32)})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
 
-      photons.forEach(p => {
-        // Solar visible photons stream downwards towards surface
-        if (p.type === 'solar-visible') {
-          p.y += 1.8;
+        if (isPlaying) {
+          ev.radius += 1.2 * simSpeed;
+        }
+        if (ev.radius > 32) {
+          conversionEvents.splice(c, 1);
+        }
+      }
+
+      // Draw Visible Light Ray Beams if enabled
+      if (showRays) {
+        ctx.strokeStyle = 'rgba(253, 224, 71, 0.12)';
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.moveTo(30, 2);
+        ctx.lineTo(120, surfaceY);
+        ctx.moveTo(70, 2);
+        ctx.lineTo(260, surfaceY);
+        ctx.moveTo(110, 2);
+        ctx.lineTo(440, surfaceY);
+        ctx.moveTo(150, 2);
+        ctx.lineTo(width - 50, surfaceY);
+        ctx.stroke();
+        ctx.lineWidth = 1;
+      }
+
+      // 4. Update and Render Actual Labeled Molecules
+      molecules.forEach(mol => {
+        if (isPlaying) {
+          mol.x += mol.vx * simSpeed;
+          mol.y += mol.vy * simSpeed;
+          mol.rotation += mol.vRot * simSpeed;
+
+          if (mol.y < atmosphereTopY + 16 || mol.y > surfaceY - 20) mol.vy *= -1;
+          if (mol.x < 20 || mol.x > width - 20) mol.vx *= -1;
+        }
+
+        const isVibrating = now < mol.vibratingUntil;
+        const vibX = isVibrating ? (Math.random() - 0.5) * 4 : 0;
+        const vibY = isVibrating ? (Math.random() - 0.5) * 4 : 0;
+
+        // Expanding Resonance Pulse Ring when molecule absorbs IR
+        if (isVibrating && mol.pulseRadius > 0) {
           ctx.beginPath();
-          ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
-          ctx.fillStyle = '#fde047'; // bright solar yellow
+          ctx.arc(mol.x, mol.y, mol.pulseRadius, 0, Math.PI * 2);
+          ctx.strokeStyle = mol.type === 'co2' ? 'rgba(244, 63, 94, 0.85)' : 'rgba(56, 189, 248, 0.9)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          // Absorption Callout Text
+          ctx.fillStyle = mol.type === 'co2' ? '#fda4af' : '#7dd3fc';
+          ctx.font = 'bold 9px sans-serif';
+          ctx.fillText(
+            `${mol.type.toUpperCase()} Absorbed ${mol.absorbedWavelength}!`, 
+            mol.x - 28, 
+            mol.y - mol.pulseRadius - 4
+          );
+
+          if (isPlaying) mol.pulseRadius += 1.0 * simSpeed;
+        }
+
+        ctx.save();
+        ctx.translate(mol.x + vibX, mol.y + vibY);
+        ctx.rotate(mol.rotation);
+
+        if (mol.type === 'co2') {
+          // Carbon Dioxide: O = C = O (Linear Triatomic)
+          const bondLength = 12;
+
+          // Dual covalent bonds
+          ctx.strokeStyle = isVibrating ? '#f43f5e' : '#cbd5e1';
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          ctx.moveTo(-bondLength, -1.8);
+          ctx.lineTo(bondLength, -1.8);
+          ctx.moveTo(-bondLength, 1.8);
+          ctx.lineTo(bondLength, 1.8);
+          ctx.stroke();
+
+          // Central Carbon Atom (Black with 'C')
+          ctx.beginPath();
+          ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
+          ctx.fillStyle = isVibrating ? '#be123c' : '#1e293b';
+          ctx.fill();
+          ctx.strokeStyle = '#64748b';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 6.5px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('C', 0, 0);
+
+          // Two Oxygen Atoms (Red with 'O')
+          [-bondLength, bondLength].forEach(oxX => {
+            ctx.beginPath();
+            ctx.arc(oxX, 0, 6, 0, Math.PI * 2);
+            ctx.fillStyle = isVibrating ? '#f43f5e' : '#ef4444';
+            ctx.fill();
+            ctx.strokeStyle = '#991b1b';
+            ctx.stroke();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 6.5px sans-serif';
+            ctx.fillText('O', oxX, 0);
+          });
+        } else {
+          // Methane: CH4 (Tetrahedral with Central C and 4 H atoms)
+          const bondR = 10;
+          ctx.strokeStyle = isVibrating ? '#38bdf8' : '#94a3b8';
+          ctx.lineWidth = 1.8;
+
+          const angles = [0, (Math.PI * 2) / 3, (Math.PI * 4) / 3, -Math.PI / 2];
+          angles.forEach(ang => {
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(ang) * bondR, Math.sin(ang) * bondR);
+            ctx.stroke();
+
+            // Hydrogen Sphere (Cyan/White with 'H')
+            const hx = Math.cos(ang) * bondR;
+            const hy = Math.sin(ang) * bondR;
+            ctx.beginPath();
+            ctx.arc(hx, hy, 4, 0, Math.PI * 2);
+            ctx.fillStyle = isVibrating ? '#7dd3fc' : '#f0fdf4';
+            ctx.fill();
+            ctx.strokeStyle = '#0284c7';
+            ctx.stroke();
+
+            ctx.fillStyle = '#0369a1';
+            ctx.font = 'bold 5.5px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('H', hx, hy);
+          });
+
+          // Central Carbon Atom
+          ctx.beginPath();
+          ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
+          ctx.fillStyle = isVibrating ? '#0284c7' : '#1e293b';
+          ctx.fill();
+          ctx.strokeStyle = '#38bdf8';
+          ctx.stroke();
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 6.5px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('C', 0, 0);
+        }
+
+        ctx.restore();
+      });
+
+      // 5. Update and Render Photons
+      photons.forEach(p => {
+        if (isPlaying) {
+          if (p.tracked) {
+            p.trail.push({ x: p.x, y: p.y });
+            if (p.trail.length > 25) p.trail.shift();
+          }
+
+          if (p.type === 'solar-visible') {
+            // Visible Solar: Streams downward toward surface
+            p.y += 2.0 * simSpeed;
+            p.x += p.vx * simSpeed;
+
+            // STRIKES GROUND: Visible Light Transformed to Thermal Infrared!
+            if (p.y >= surfaceY) {
+              p.y = surfaceY - 2;
+
+              // Check albedo reflection
+              if (Math.random() < customAlbedo / 100) {
+                p.type = 'reflected-solar';
+                p.vy = -2.0;
+                p.vx = (Math.random() - 0.5) * 1.0;
+              } else {
+                // VISIBLE ABSORBED -> CONVERTED TO THERMAL IR!
+                p.type = 'thermal-ir';
+                p.vy = -1.6;
+                p.vx = (Math.random() - 0.5) * 1.2;
+                p.bounces = 0;
+                p.origin = 'surface-conversion';
+
+                // Spawn conversion shockwave
+                conversionEvents.push({
+                  id: nextConversionId++,
+                  x: p.x,
+                  y: surfaceY,
+                  timestamp: now,
+                  radius: 4,
+                });
+              }
+            }
+          } else if (p.type === 'reflected-solar') {
+            // Reflected visible light escapes to space untouched
+            p.y += p.vy * simSpeed;
+            p.x += p.vx * simSpeed;
+
+            if (p.y <= 0) {
+              p.y = 0;
+              p.type = 'solar-visible';
+              p.x = 25 + Math.random() * (width - 50);
+              p.vy = 2.0;
+            }
+          } else {
+            // Thermal Infrared (Wavy rising / bouncing)
+            p.y += p.vy * simSpeed;
+            p.x += p.vx * simSpeed;
+
+            // Check collision with CO2 and CH4 molecules
+            if (molecules.length > 0 && p.y > atmosphereTopY + 8 && p.y < surfaceY - 10) {
+              for (const mol of molecules) {
+                const distSq = (p.x - mol.x) * (p.x - mol.x) + (p.y - mol.y) * (p.y - mol.y);
+                if (distSq < 280) {
+                  // Molecule absorbs the Thermal IR photon!
+                  mol.vibratingUntil = now + 450;
+                  mol.pulseRadius = 6;
+                  p.bounces++;
+                  localTrapped++;
+
+                  // Re-radiate in random isotropic direction!
+                  // CRITICAL: Roughly 50% are scattered BACK DOWN toward the ground!
+                  const angle = Math.random() * Math.PI * 2;
+                  const speed = 1.6;
+                  p.vx = Math.cos(angle) * speed;
+                  p.vy = Math.sin(angle) * speed;
+
+                  if (p.vy > 0) {
+                    p.origin = 'back-radiation';
+                  }
+
+                  p.x += p.vx * 3;
+                  p.y += p.vy * 3;
+                  break;
+                }
+              }
+            }
+
+            // Downward Back-radiation hits ground: Re-absorbed by Earth!
+            if (p.y >= surfaceY && p.vy > 0) {
+              p.y = surfaceY - 2;
+              p.vy = -1.5;
+              p.vx = (Math.random() - 0.5) * 1.5;
+            }
+
+            // Reaches top of atmosphere: Escapes to Space!
+            if (p.y <= atmosphereTopY) {
+              localEscaped++;
+              p.y = 2;
+              p.type = 'solar-visible';
+              p.x = 25 + Math.random() * (width - 50);
+              p.vy = 2.0;
+              p.vx = (Math.random() - 0.5) * 0.8;
+              p.trail = [];
+            }
+          }
+
+          if (p.x < 5) p.x = width - 8;
+          if (p.x > width - 5) p.x = 8;
+        }
+
+        // Draw Trails for Tracked Photon
+        if (p.tracked && p.trail.length > 1) {
+          ctx.beginPath();
+          ctx.moveTo(p.trail[0].x, p.trail[0].y);
+          for (let t = 1; t < p.trail.length; t++) {
+            ctx.lineTo(p.trail[t].x, p.trail[t].y);
+          }
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.75)';
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+
+          ctx.fillStyle = '#38bdf8';
+          ctx.font = 'bold 9.5px sans-serif';
+          ctx.fillText(
+            p.type === 'thermal-ir' ? `Tracked IR (${p.bounces} Bounces)` : 'Tracked Solar', 
+            p.x + 8, 
+            p.y - 4
+          );
+        }
+
+        // Draw Photon shape
+        if (p.type === 'solar-visible') {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+          ctx.fillStyle = '#fde047';
           ctx.shadowColor = '#facc15';
           ctx.shadowBlur = 6;
           ctx.fill();
-
-          // Hits surface -> converted into thermal IR or reflected
-          if (p.y >= height - 35) {
-            if (Math.random() < customAlbedo / 100) {
-              p.type = 'reflected-solar';
-              p.vy = -1.8;
-            } else {
-              p.type = 'thermal-ir';
-              p.vy = -1.5;
-            }
-          }
+          ctx.shadowBlur = 0;
         } else if (p.type === 'reflected-solar') {
-          p.y += p.vy;
           ctx.beginPath();
-          ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+          ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
           ctx.fillStyle = '#fef08a';
           ctx.fill();
-          if (p.y <= 0) {
-            p.y = 0;
-            p.type = 'solar-visible';
-            p.x = Math.random() * width;
-          }
         } else {
-          // Thermal IR Photons (radiated upward from ground)
-          p.y += p.vy;
-          p.x += p.vx;
-
+          // Thermal IR
           ctx.beginPath();
-          ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
-          ctx.fillStyle = '#f43f5e'; // infrared magenta/red
+          ctx.arc(p.x, p.y, p.tracked ? 4.5 : 3.2, 0, Math.PI * 2);
+          ctx.fillStyle = p.origin === 'back-radiation' ? '#f59e0b' : '#f43f5e';
           ctx.shadowColor = '#fb7185';
           ctx.shadowBlur = 8;
           ctx.fill();
-
-          // Absorption and re-radiation by CO2 molecule in middle atmosphere
-          if (p.y > 40 && p.y < height - 60 && Math.random() < 0.015 * (1 + co2DensityFactor * 4)) {
-            // Absorbed by greenhouse gas! Re-emit in random direction (often back down to surface!)
-            p.vy = Math.random() > 0.45 ? 1.4 : -1.4;
-            p.vx = (Math.random() - 0.5) * 2;
-            p.trappedCount++;
-          }
-
-          // Escaped to space
-          if (p.y <= 0) {
-            p.y = 0;
-            p.type = 'solar-visible';
-            p.x = Math.random() * width;
-            p.trappedCount = 0;
-          }
-
-          // Re-absorbed by ground (greenhouse back-radiation!)
-          if (p.y >= height - 35 && p.vy > 0) {
-            p.vy = -1.5;
-            p.vx = (Math.random() - 0.5) * 1.5;
-          }
+          ctx.shadowBlur = 0;
         }
       });
 
-      animationFrameId = requestAnimationFrame(render);
+      // Update counters periodically
+      if (Math.random() < 0.08) {
+        setEscapedCount(prev => prev + localEscaped);
+        setTrappedBackCount(prev => prev + localTrapped);
+        localEscaped = 0;
+        localTrapped = 0;
+      }
+
+      animId = requestAnimationFrame(render);
     };
 
-    render();
-
+    animId = requestAnimationFrame(render);
     return () => {
-      cancelAnimationFrame(animationFrameId);
+      cancelAnimationFrame(animId);
+      window.removeEventListener('resize', resizeCanvas);
     };
-  }, [showPhotons, customCO2, customSolar, customAlbedo, greenhouseStrength, selectedPlanet]);
+  }, [
+    isPlaying, 
+    simSpeed, 
+    tracePhoton, 
+    moleculeFilter, 
+    showRays,
+    customCO2, 
+    customCH4, 
+    customSolar, 
+    customAlbedo, 
+    customWaterVapor, 
+    greenhouseIndex, 
+    selectedPlanet, 
+    isNoGreenhouse
+  ]);
+
+  // Derived Trapping vs Escaping Percentages
+  const totalInteractions = escapedCount + trappedBackCount;
+  const trappedPercent = totalInteractions > 20 
+    ? Math.round((trappedBackCount / totalInteractions) * 100) 
+    : Math.round(greenhouseIndex * 100);
+  const escapedPercent = 100 - trappedPercent;
 
   return (
-    <div className="space-y-8 animate-fadeIn">
-      {/* Header Banner */}
-      <div className="bg-slate-900/80 rounded-2xl p-6 border border-slate-800 shadow-md">
-        <div className="flex items-center gap-2 text-sky-400 text-xs font-semibold mb-2">
-          <Sparkles className="w-4 h-4" />
-          Module 7: Planetary Atmospheric Conditions & Radiative Balance
+    <div className="flex flex-col h-[calc(100vh-4.25rem)] min-h-[580px] overflow-hidden text-slate-100 select-none">
+      {/* Top Bar: Compact Planet Presets & Story Navigation */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-900 border-b border-slate-800 shrink-0">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          <span className="text-[11px] font-bold uppercase text-slate-400 mr-1 flex items-center gap-1 shrink-0">
+            <Globe2 className="w-3.5 h-3.5 text-indigo-400" />
+            Preset:
+          </span>
+          {PLANETARY_BODIES.map(planet => {
+            const isSelected = selectedPlanet === planet.id;
+            return (
+              <button
+                key={planet.id}
+                onClick={() => handleSelectPreset(planet.id)}
+                className={`px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition flex items-center gap-1.5 ${
+                  isSelected
+                    ? 'bg-indigo-600 text-white shadow-sm ring-1 ring-indigo-400'
+                    : 'bg-slate-800/80 text-slate-300 hover:text-white hover:bg-slate-700'
+                }`}
+              >
+                <span>{planet.name.split('(')[0].trim()}</span>
+                <span className={`text-[10px] font-mono px-1 py-0.2 rounded ${
+                  isSelected ? 'bg-indigo-900/90 text-amber-300' : 'bg-slate-900 text-slate-400'
+                }`}>
+                  {planet.actualSurfaceTempC > 0 ? `+${planet.actualSurfaceTempC}` : planet.actualSurfaceTempC}°C
+                </span>
+              </button>
+            );
+          })}
         </div>
-        <h2 className="text-xl sm:text-2xl font-bold text-white">
-          Greenhouse Effect & Atmospheric Simulator
-        </h2>
-        <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-3xl leading-relaxed">
-          Compare how atmospheric composition across Earth, Venus, Mars, and paleoclimate conditions governs surface equilibrium temperatures. Witness how greenhouse gas molecules absorb outgoing thermal infrared and re-radiate heat back to the surface.
-        </p>
-      </div>
 
-      {/* Planetary Atmosphere Comparison Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {PLANETARY_BODIES.map(planet => {
-          const isSelected = selectedPlanet === planet.id;
-          return (
+        {/* Story / Guided Walkthrough Pill */}
+        <div className="flex items-center gap-1.5 shrink-0 text-xs">
+          <span className="text-[11px] text-slate-400 font-medium hidden md:inline">Guided View:</span>
+          {[
+            { s: 0, label: 'Full Sim' },
+            { s: 1, label: '1. Sunlight In' },
+            { s: 2, label: '2. Ground Converts IR' },
+            { s: 3, label: '3. IR Trapping & Back-Rad' },
+          ].map(st => (
             <button
-              key={planet.id}
-              onClick={() => handleSelectPreset(planet.id)}
-              className={`text-left p-3.5 rounded-xl border transition-all ${
-                isSelected
-                  ? 'bg-indigo-950/70 border-indigo-500 shadow-md ring-2 ring-indigo-500/20'
-                  : 'bg-slate-900/50 border-slate-800 hover:border-slate-700 hover:bg-slate-800/40'
+              key={st.s}
+              onClick={() => {
+                setStoryStep(st.s);
+                if (st.s === 1) {
+                  setShowRays(true);
+                  setSimSpeed(0.35);
+                } else if (st.s === 2) {
+                  setSimSpeed(0.35);
+                  setTracePhoton(true);
+                } else if (st.s === 3) {
+                  setSimSpeed(1.0);
+                  setTracePhoton(true);
+                } else {
+                  setSimSpeed(1.0);
+                }
+              }}
+              className={`px-2 py-0.5 rounded text-[11px] font-semibold transition ${
+                storyStep === st.s
+                  ? 'bg-amber-500 text-slate-950 font-bold'
+                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
               }`}
             >
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  {planet.distanceFromSunAU} AU
-                </span>
-                {isSelected && (
-                  <span className="w-2 h-2 rounded-full bg-indigo-400" />
-                )}
-              </div>
-              <h4 className="text-xs font-bold text-white mt-1.5 line-clamp-1">{planet.name}</h4>
-              <div className="mt-2 text-[11px] font-mono font-bold text-amber-300">
-                {planet.actualSurfaceTempC}°C
-              </div>
-              <div className="text-[10px] text-slate-400">
-                GHE: +{planet.greenhouseWarmingC}°C
-              </div>
+              {st.label}
             </button>
-          );
-        })}
+          ))}
+        </div>
       </div>
 
-      {/* Main Simulation Viewport & Controls */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left: Animated Photon Radiation Stage (7 cols) */}
-        <div className="lg:col-span-7 bg-slate-900/90 rounded-2xl p-6 border border-slate-800 shadow-xl flex flex-col justify-between">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
-            <div className="flex items-center gap-2">
-              <Layers className="w-4 h-4 text-sky-400" />
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                Atmospheric Radiation Column: Visible Solar vs. Trapped Thermal IR
-              </h3>
-            </div>
-            <button
-              onClick={() => setShowPhotons(!showPhotons)}
-              className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 hover:text-white"
-            >
-              {showPhotons ? 'Hide Photons' : 'Show Photons'}
-            </button>
-          </div>
-
-          {/* Canvas Viewport */}
-          <div className="relative w-full h-80 rounded-xl overflow-hidden border border-slate-800 bg-slate-950">
-            <canvas
-              ref={canvasRef}
-              width={560}
-              height={320}
-              className="w-full h-full block"
-            />
-
-            {/* Sun Icon in Top Left Corner */}
-            <div className="absolute top-3 left-3 bg-amber-500/20 border border-amber-500/40 rounded-xl p-2 flex items-center gap-2 text-amber-300 text-xs backdrop-blur-sm">
-              <Sun className="w-5 h-5 text-amber-400 animate-spin-slow" />
-              <div>
-                <span className="font-bold block text-[11px]">Solar Constant</span>
-                <span className="font-mono text-[10px] text-amber-200">{customSolar} W/m²</span>
-              </div>
-            </div>
-
-            {/* Legend Overlay */}
-            <div className="absolute top-3 right-3 bg-slate-900/80 border border-slate-700/60 rounded-xl p-2 text-[10px] space-y-1 backdrop-blur-sm">
-              <div className="flex items-center gap-1.5 text-yellow-300">
-                <span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" />
-                <span>Visible Solar Photons (Incoming)</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-rose-400">
-                <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />
-                <span>Thermal IR Photons (Surface / Trapped)</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Energy Budget Balance Bar */}
-          <div className="mt-4 pt-3 border-t border-slate-800 grid grid-cols-3 gap-2 text-center text-xs">
-            <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/50">
-              <span className="text-[10px] text-slate-400 block uppercase">Net Solar Absorbed</span>
-              <span className="font-mono font-bold text-amber-300 text-sm">
-                {Math.round(S_eff)} W/m²
-              </span>
-            </div>
-            <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/50">
-              <span className="text-[10px] text-slate-400 block uppercase">No-Greenhouse Temp</span>
-              <span className="font-mono font-bold text-sky-300 text-sm">
-                {T_no_gh.toFixed(1)}°C
-              </span>
-            </div>
-            <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/50">
-              <span className="text-[10px] text-slate-400 block uppercase">Greenhouse Trapping</span>
-              <span className="font-mono font-bold text-rose-400 text-sm">
-                +{totalWarming.toFixed(1)}°C
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Interactive Atmospheric Controls & Chemistry (5 cols) */}
-        <div className="lg:col-span-5 space-y-4">
-          {/* Surface Temperature Outcome */}
-          <div className="bg-gradient-to-b from-slate-900 to-slate-950 rounded-2xl p-5 border border-slate-800 shadow-xl text-center">
-            <span className="text-xs uppercase font-bold tracking-wider text-slate-400">
+      {/* Main 3-Column Workstation Layout (Viewport Contained) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 flex-1 min-h-0 overflow-hidden divide-y lg:divide-y-0 lg:divide-x divide-slate-800">
+        
+        {/* LEFT TOOLBAR (3 cols): Sliders & Energy Balance */}
+        <div className="lg:col-span-3 bg-slate-950/70 p-3 sm:p-3.5 flex flex-col justify-between overflow-y-auto space-y-3">
+          {/* Surface Temperature Outcome Display */}
+          <div className="bg-gradient-to-br from-slate-900 to-indigo-950 p-3 rounded-xl border border-slate-800 text-center shadow-md">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">
               Equilibrium Surface Temperature
             </span>
-            <div className="text-4xl sm:text-5xl font-mono font-extrabold text-white mt-2">
+            <div className="text-3xl sm:text-4xl font-mono font-black text-white mt-0.5 tracking-tight">
               {finalSurfaceTempC > 0 ? `+${finalSurfaceTempC}` : finalSurfaceTempC}°C
             </div>
-            <div className="text-xs text-slate-400 font-mono mt-1">
+            <div className="text-[11px] font-mono text-slate-400">
               ({finalSurfaceTempF > 0 ? `+${finalSurfaceTempF}` : finalSurfaceTempF}°F)
             </div>
 
-            <div className="mt-4 pt-3 border-t border-slate-800 text-xs text-slate-300 flex items-center justify-around">
-              <div>
-                <span className="text-slate-400 block text-[10px]">Active Body:</span>
-                <span className="font-bold text-white">{currentPreset.name}</span>
+            <div className="grid grid-cols-2 gap-1.5 mt-2 pt-2 border-t border-slate-800/80 text-[10px]">
+              <div className="bg-slate-900/80 p-1.5 rounded-lg border border-slate-800">
+                <span className="text-slate-400 block">No-GHG Temp:</span>
+                <span className="font-mono font-bold text-sky-300">{T_no_gh.toFixed(1)}°C</span>
               </div>
-              <div className="h-6 w-px bg-slate-800" />
-              <div>
-                <span className="text-slate-400 block text-[10px]">Atmospheric Pressure:</span>
-                <span className="font-bold text-sky-400">{currentPreset.surfacePressureAtm} atm</span>
+              <div className="bg-slate-900/80 p-1.5 rounded-lg border border-slate-800">
+                <span className="text-slate-400 block">GHE Warmth:</span>
+                <span className="font-mono font-bold text-rose-400">+{totalWarming.toFixed(1)}°C</span>
               </div>
             </div>
           </div>
 
-          {/* Interactive Atmospheric Sliders */}
-          <div className="bg-slate-900/80 rounded-2xl p-5 border border-slate-800 shadow-md space-y-4">
-            <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-              <Sliders className="w-4 h-4 text-indigo-400" />
-              Adjust Atmospheric Parameters
-            </h4>
+          {/* Interactive Gas Controls */}
+          <div className="space-y-3 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80">
+            <div className="flex items-center justify-between pb-1 border-b border-slate-800 text-xs font-bold text-slate-200 uppercase tracking-wider">
+              <span className="flex items-center gap-1.5">
+                <Sliders className="w-3.5 h-3.5 text-indigo-400" />
+                Gas Concentrations
+              </span>
+              <button 
+                onClick={handleResetCounters} 
+                className="text-[10px] text-indigo-400 hover:underline font-normal"
+                title="Reset simulation statistics"
+              >
+                Reset Stats
+              </button>
+            </div>
 
-            {/* CO2 Slider */}
-            <div>
-              <div className="flex items-center justify-between text-xs mb-1">
-                <span className="text-slate-300">Carbon Dioxide (CO₂) Concentration:</span>
-                <span className="font-mono font-bold text-amber-400">
+            {/* 1. CO2 Slider */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-slate-200 flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />
+                  Carbon Dioxide (CO₂):
+                </span>
+                <span className="font-mono font-bold text-amber-400 text-xs">
                   {customCO2 >= 10000 ? `${(customCO2 / 10000).toFixed(1)}%` : `${customCO2} ppm`}
                 </span>
               </div>
@@ -374,71 +855,456 @@ export const AtmosphereSimulator: React.FC = () => {
                 max="2000"
                 step="20"
                 value={Math.min(2000, customCO2)}
-                onChange={e => setCustomCO2(parseFloat(e.target.value))}
-                className="w-full accent-amber-500 cursor-pointer"
+                onChange={e => {
+                  setCustomCO2(parseFloat(e.target.value));
+                  handleResetCounters();
+                }}
+                className="w-full accent-amber-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
               />
-              <div className="flex justify-between text-[10px] text-slate-500 mt-0.5">
-                <span>0 ppm (Snowball)</span>
-                <span>280 (Pre-Ind)</span>
-                <span>424 (Today)</span>
-                <span>1000+ (High)</span>
+              <div className="flex justify-between text-[9px] text-slate-500">
+                <button onClick={() => setCustomCO2(0)} className="hover:text-slate-300">0 ppm</button>
+                <button onClick={() => setCustomCO2(280)} className="hover:text-slate-300">280 (1750)</button>
+                <button onClick={() => setCustomCO2(424)} className="hover:text-amber-400 font-bold">424 (Now)</button>
+                <button onClick={() => setCustomCO2(700)} className="hover:text-slate-300">700 (2100)</button>
+                <button onClick={() => setCustomCO2(2000)} className="hover:text-slate-300">2000+</button>
               </div>
             </div>
 
-            {/* Albedo / Cloud Reflectivity Slider */}
-            <div>
-              <div className="flex items-center justify-between text-xs mb-1">
-                <span className="text-slate-300">Planetary Albedo (Cloud & Ice Reflectivity):</span>
-                <span className="font-mono font-bold text-sky-400">{customAlbedo}%</span>
+            {/* 2. Methane (CH4) Slider - Separate control & chemistry difference */}
+            <div className="space-y-1 pt-1 border-t border-slate-800/60">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-sky-400 inline-block" />
+                  <span className="font-bold text-slate-200">Methane (CH₄):</span>
+                  <span className="text-[9px] px-1 py-0.2 rounded bg-sky-950 text-sky-300 border border-sky-800 font-mono">
+                    28× Potent
+                  </span>
+                </div>
+                <span className="font-mono font-bold text-sky-400 text-xs">
+                  {customCH4} ppb
+                </span>
               </div>
               <input
                 type="range"
-                min="5"
-                max="85"
-                step="1"
-                value={customAlbedo}
-                onChange={e => setCustomAlbedo(parseFloat(e.target.value))}
-                className="w-full accent-sky-500 cursor-pointer"
+                min="0"
+                max="5000"
+                step="50"
+                value={customCH4}
+                onChange={e => {
+                  setCustomCH4(parseFloat(e.target.value));
+                  handleResetCounters();
+                }}
+                className="w-full accent-sky-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
               />
-              <div className="flex justify-between text-[10px] text-slate-500 mt-0.5">
-                <span>5% (Dark Ocean)</span>
-                <span>30% (Earth Mean)</span>
-                <span>75% (Venus Clouds)</span>
+              <div className="flex justify-between text-[9px] text-slate-500">
+                <button onClick={() => setCustomCH4(0)} className="hover:text-slate-300">0 ppb</button>
+                <button onClick={() => setCustomCH4(720)} className="hover:text-slate-300">720 (Pre-Ind)</button>
+                <button onClick={() => setCustomCH4(1925)} className="hover:text-sky-400 font-bold">1925 (Now)</button>
+                <button onClick={() => setCustomCH4(3500)} className="hover:text-slate-300">3500</button>
+                <button onClick={() => setCustomCH4(5000)} className="hover:text-rose-400 font-bold">5000</button>
               </div>
             </div>
 
-            {/* Solar Irradiance Slider */}
-            <div>
-              <div className="flex items-center justify-between text-xs mb-1">
-                <span className="text-slate-300">Solar Irradiance at Orbit:</span>
-                <span className="font-mono font-bold text-yellow-400">{customSolar} W/m²</span>
+            {/* 3. Water Vapor Feedback & Cloud Albedo */}
+            <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800/60 text-[10px]">
+              <div>
+                <div className="flex justify-between mb-0.5">
+                  <span className="text-slate-400">Water Vapor:</span>
+                  <span className="font-mono font-bold text-indigo-300">{customWaterVapor.toFixed(1)}×</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="2.0"
+                  step="0.1"
+                  value={customWaterVapor}
+                  onChange={e => setCustomWaterVapor(parseFloat(e.target.value))}
+                  className="w-full accent-indigo-500 cursor-pointer h-1 bg-slate-800"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between mb-0.5">
+                  <span className="text-slate-400">Albedo:</span>
+                  <span className="font-mono font-bold text-cyan-300">{customAlbedo}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="5"
+                  max="80"
+                  step="1"
+                  value={customAlbedo}
+                  onChange={e => setCustomAlbedo(parseFloat(e.target.value))}
+                  className="w-full accent-cyan-500 cursor-pointer h-1 bg-slate-800"
+                />
+              </div>
+            </div>
+
+            {/* 4. Solar Constant */}
+            <div className="pt-1 border-t border-slate-800/60 text-[10px]">
+              <div className="flex justify-between mb-0.5">
+                <span className="text-slate-400">Solar Irradiance (Orbit):</span>
+                <span className="font-mono font-bold text-yellow-300">{customSolar} W/m²</span>
               </div>
               <input
                 type="range"
                 min="500"
-                max="2700"
+                max="2650"
                 step="50"
                 value={customSolar}
                 onChange={e => setCustomSolar(parseFloat(e.target.value))}
-                className="w-full accent-yellow-500 cursor-pointer"
+                className="w-full accent-yellow-500 cursor-pointer h-1 bg-slate-800"
               />
-              <div className="flex justify-between text-[10px] text-slate-500 mt-0.5">
-                <span>589 (Mars)</span>
-                <span>1361 (Earth)</span>
-                <span>2614 (Venus)</span>
-              </div>
             </div>
           </div>
 
-          {/* Molecular Vibration & Mechanism Card */}
-          <div className="bg-slate-900/80 rounded-2xl p-4 border border-slate-800 text-xs">
-            <h5 className="font-bold text-white mb-2 flex items-center gap-1.5">
-              <Eye className="w-3.5 h-3.5 text-rose-400" />
-              How CO₂ Traps Heat at the Molecular Level
-            </h5>
-            <p className="text-slate-300 leading-relaxed text-[11px]">
-              Unlike symmetrical diatomic gases (<span className="text-sky-300">N₂</span> and <span className="text-sky-300">O₂</span>), the carbon dioxide molecule (<span className="text-rose-300">O=C=O</span>) has flexible bending and stretching vibrational modes that resonant with infrared radiation wavelengths (~15 micrometers). When a thermal IR photon is absorbed, the molecule vibrates vigorously before re-emitting the photon in a random direction—sending half of that thermal energy back down toward Earth.
-            </p>
+          {/* Radiative Forcing Breakdown Callout */}
+          <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 text-[11px] space-y-1 text-slate-300">
+            <span className="font-bold text-slate-200 uppercase tracking-wider text-[10px] block">
+              Radiative Energy Balance:
+            </span>
+            <div className="flex justify-between text-[10px]">
+              <span>Net Solar Absorbed:</span>
+              <span className="font-mono text-amber-300 font-bold">{Math.round(S_eff)} W/m²</span>
+            </div>
+            <div className="flex justify-between text-[10px]">
+              <span>CO₂ Radiative Forcing:</span>
+              <span className="font-mono text-rose-400 font-bold">{co2Forcing > 0 ? `+${co2Forcing.toFixed(1)}` : co2Forcing.toFixed(1)} W/m²</span>
+            </div>
+            <div className="flex justify-between text-[10px]">
+              <span>CH₄ Radiative Forcing:</span>
+              <span className="font-mono text-sky-400 font-bold">{ch4Forcing > 0 ? `+${ch4Forcing.toFixed(1)}` : ch4Forcing.toFixed(1)} W/m²</span>
+            </div>
+          </div>
+        </div>
+
+        {/* CENTER STAGE (6 cols): The Main Radiation & Transformation Canvas */}
+        <div className="lg:col-span-6 flex flex-col h-full min-h-0 bg-slate-950 relative overflow-hidden">
+          {/* Top Canvas Controls Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-900/95 border-b border-slate-800 z-10 shrink-0 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-white flex items-center gap-1.5 text-xs">
+                <Activity className="w-3.5 h-3.5 text-rose-400" />
+                Visible-to-IR Radiation Stage
+              </span>
+            </div>
+
+            {/* Play/Pause & Speed Tools */}
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setIsPlaying(!isPlaying)}
+                className={`px-2 py-0.5 rounded text-xs font-semibold flex items-center gap-1 transition ${
+                  isPlaying ? 'bg-slate-800 text-slate-300 hover:text-white' : 'bg-emerald-600 text-white'
+                }`}
+              >
+                {isPlaying ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+                <span>{isPlaying ? 'Pause' : 'Play'}</span>
+              </button>
+
+              <button
+                onClick={() => setSimSpeed(prev => prev === 1.0 ? 0.35 : 1.0)}
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold transition ${
+                  simSpeed === 0.35 ? 'bg-indigo-950 text-indigo-300 border border-indigo-600' : 'bg-slate-800 text-slate-400 hover:text-white'
+                }`}
+                title="Slow-motion enables easy observation of each photon hitting molecules and bouncing back down"
+              >
+                {simSpeed === 0.35 ? '🐢 0.35x Slow-Mo' : '⚡ 1.0x Normal'}
+              </button>
+
+              <button
+                onClick={() => setTracePhoton(!tracePhoton)}
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold transition ${
+                  tracePhoton ? 'bg-sky-950 text-sky-300 border border-sky-600' : 'bg-slate-800 text-slate-400'
+                }`}
+              >
+                {tracePhoton ? 'Trace IR: ON' : 'Trace: OFF'}
+              </button>
+
+              <button
+                onClick={() => setShowRays(!showRays)}
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold transition ${
+                  showRays ? 'bg-amber-950 text-amber-300 border border-amber-600' : 'bg-slate-800 text-slate-400'
+                }`}
+              >
+                {showRays ? 'Sun Rays: ON' : 'Rays: OFF'}
+              </button>
+            </div>
+          </div>
+
+          {/* Full-Height Responsive Canvas Viewport */}
+          <div ref={containerRef} className="flex-1 w-full h-full min-h-0 relative bg-slate-950 overflow-hidden">
+            <canvas
+              ref={canvasRef}
+              className="w-full h-full block"
+            />
+
+            {/* Sun Badge (Top Left) */}
+            <div className="absolute top-2 left-2 bg-slate-900/85 border border-amber-500/50 rounded-lg px-2 py-1 flex items-center gap-1.5 text-amber-300 text-xs backdrop-blur-md shadow-md">
+              <Sun className="w-4 h-4 text-amber-400 animate-spin-slow shrink-0" />
+              <div>
+                <span className="font-mono text-xs font-bold text-white leading-tight block">{customSolar} W/m²</span>
+                <span className="text-[9px] text-amber-300/80 leading-none block">Visible Solar</span>
+              </div>
+            </div>
+
+            {/* Escaping to Space Badge (Top Right) */}
+            <div className="absolute top-2 right-2 bg-slate-900/85 border border-sky-500/50 rounded-lg px-2 py-1 flex items-center gap-1.5 text-sky-300 text-xs backdrop-blur-md shadow-md">
+              <div className="text-right">
+                <span className="font-mono text-xs font-bold text-sky-300 leading-tight block">{escapedPercent}%</span>
+                <span className="text-[9px] text-slate-400 leading-none block">Escaping to Deep Space</span>
+              </div>
+              <ArrowUp className="w-3.5 h-3.5 text-sky-400 animate-bounce" />
+            </div>
+
+            {/* Molecule Filter Tabs on Canvas (Bottom Left) */}
+            <div className="absolute bottom-11 left-2 flex items-center gap-1 bg-slate-950/90 border border-slate-800 rounded-lg p-0.5 text-[10px] backdrop-blur-md">
+              <span className="text-slate-400 px-1 font-semibold">Filter:</span>
+              <button
+                onClick={() => setMoleculeFilter('all')}
+                className={`px-1.5 py-0.5 rounded font-bold transition ${
+                  moleculeFilter === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                All Gases
+              </button>
+              <button
+                onClick={() => setMoleculeFilter('co2')}
+                className={`px-1.5 py-0.5 rounded font-bold transition ${
+                  moleculeFilter === 'co2' ? 'bg-rose-600 text-white' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                CO₂ Only
+              </button>
+              <button
+                onClick={() => setMoleculeFilter('ch4')}
+                className={`px-1.5 py-0.5 rounded font-bold transition ${
+                  moleculeFilter === 'ch4' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                CH₄ (Methane) Only
+              </button>
+            </div>
+
+            {/* Legend Overlay on Canvas (Bottom Right) */}
+            <div className="absolute bottom-11 right-2 bg-slate-950/90 border border-slate-800 rounded-lg p-1.5 text-[9px] space-y-0.5 backdrop-blur-md shadow-md">
+              <div className="flex items-center gap-1 text-yellow-300">
+                <span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" />
+                <span>Visible Solar (passes through GHG)</span>
+              </div>
+              <div className="flex items-center gap-1 text-rose-400">
+                <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />
+                <span>Thermal IR (emitted by warm ground)</span>
+              </div>
+              <div className="flex items-center gap-1 text-amber-400">
+                <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
+                <span>Trapped Back-Radiation (scattered down)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT TOOLBAR (3 cols): Chemistry Inspector & Absorption Gauges */}
+        <div className="lg:col-span-3 bg-slate-950/70 p-3 sm:p-3.5 flex flex-col justify-between overflow-y-auto space-y-3">
+          {/* Header & Tabs */}
+          <div>
+            <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
+              <div className="flex items-center gap-1 text-xs">
+                <button
+                  onClick={() => setActiveTab('inspector')}
+                  className={`px-2 py-1 rounded-lg font-bold transition ${
+                    activeTab === 'inspector'
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  Molecular Chemistry
+                </button>
+                <button
+                  onClick={() => setActiveTab('guide')}
+                  className={`px-2 py-1 rounded-lg font-bold transition ${
+                    activeTab === 'guide'
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  4-Step Guide
+                </button>
+              </div>
+            </div>
+
+            {/* TAB 1: Molecular Chemistry & Wavelength Inspector */}
+            {activeTab === 'inspector' && (
+              <div className="space-y-3 mt-2.5">
+                {/* Molecule Switcher */}
+                <div className="grid grid-cols-2 gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs text-center font-bold">
+                  <button
+                    onClick={() => setInspectedGas('co2')}
+                    className={`py-1 rounded-lg transition ${
+                      inspectedGas === 'co2' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    CO₂ (Carbon Dioxide)
+                  </button>
+                  <button
+                    onClick={() => setInspectedGas('ch4')}
+                    className={`py-1 rounded-lg transition ${
+                      inspectedGas === 'ch4' ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    CH₄ (Methane)
+                  </button>
+                </div>
+
+                {/* Animated Molecular Structure Card */}
+                {inspectedGas === 'co2' ? (
+                  <div className="bg-slate-900/80 p-3 rounded-xl border border-rose-900/40 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-white text-xs">Linear Triatomic (O = C = O)</span>
+                      <span className="text-[10px] font-mono text-rose-300 font-bold bg-rose-950 px-1.5 py-0.2 rounded border border-rose-800">
+                        15 μm IR Band
+                      </span>
+                    </div>
+
+                    {/* Diagram of CO2 */}
+                    <div className="h-16 bg-slate-950 rounded-lg flex items-center justify-center border border-slate-800 relative overflow-hidden">
+                      <div className="flex items-center gap-1">
+                        <div className="w-7 h-7 rounded-full bg-rose-600 border border-red-400 flex items-center justify-center text-[10px] font-bold text-white shadow-md">
+                          O
+                        </div>
+                        <div className="w-4 h-1.5 bg-slate-400"></div>
+                        <div className="w-8 h-8 rounded-full bg-slate-800 border-2 border-slate-600 flex items-center justify-center text-xs font-bold text-white shadow-md">
+                          C
+                        </div>
+                        <div className="w-4 h-1.5 bg-slate-400"></div>
+                        <div className="w-7 h-7 rounded-full bg-rose-600 border border-red-400 flex items-center justify-center text-[10px] font-bold text-white shadow-md">
+                          O
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-slate-300 leading-tight">
+                      • <strong className="text-white">Bending Vibration Mode:</strong> When hit by 15 μm thermal IR, the Oxygen atoms bend up and down, altering the dipole moment and trapping the heat energy.
+                    </p>
+                    <p className="text-[11px] text-slate-300 leading-tight">
+                      • <strong className="text-white">Abundance:</strong> Measured in <strong className="text-amber-400">ppm</strong> (~424 ppm today). High baseline presence in Earth&apos;s atmosphere.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-slate-900/80 p-3 rounded-xl border border-sky-900/40 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-white text-xs">Tetrahedral (CH₄)</span>
+                      <span className="text-[10px] font-mono text-sky-300 font-bold bg-sky-950 px-1.5 py-0.2 rounded border border-sky-800">
+                        7.66 μm IR Band
+                      </span>
+                    </div>
+
+                    {/* Diagram of CH4 */}
+                    <div className="h-16 bg-slate-950 rounded-lg flex items-center justify-center border border-slate-800 relative overflow-hidden">
+                      <div className="relative w-16 h-14 flex items-center justify-center">
+                        <div className="w-7 h-7 rounded-full bg-slate-800 border-2 border-sky-400 flex items-center justify-center text-xs font-bold text-white z-10">
+                          C
+                        </div>
+                        <div className="absolute top-0 w-4 h-4 rounded-full bg-sky-100 border border-sky-500 flex items-center justify-center text-[8px] font-bold text-sky-900">
+                          H
+                        </div>
+                        <div className="absolute bottom-0 left-0 w-4 h-4 rounded-full bg-sky-100 border border-sky-500 flex items-center justify-center text-[8px] font-bold text-sky-900">
+                          H
+                        </div>
+                        <div className="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-sky-100 border border-sky-500 flex items-center justify-center text-[8px] font-bold text-sky-900">
+                          H
+                        </div>
+                        <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-sky-100 border border-sky-500 flex items-center justify-center text-[8px] font-bold text-sky-900">
+                          H
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-slate-300 leading-tight">
+                      • <strong className="text-white">28×–84× Heat-Trapping Potency:</strong> Methane absorbs in the 7.66 μm &quot;atmospheric window&quot; where CO₂ and H₂O do not absorb, making each molecule far more lethal at trapping escaping heat.
+                    </p>
+                    <p className="text-[11px] text-slate-300 leading-tight">
+                      • <strong className="text-white">Abundance:</strong> Measured in <strong className="text-sky-400">ppb</strong> (~1925 ppb today). Even tiny increases produce an outsized warming burst.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 2: Step-by-Step Guided Walkthrough */}
+            {activeTab === 'guide' && (
+              <div className="space-y-2 mt-2 text-[11px] text-slate-300">
+                <div className={`p-2 rounded-lg border transition ${
+                  storyStep === 1 ? 'bg-amber-950/80 border-amber-500 text-white' : 'bg-slate-900/60 border-slate-800'
+                }`}>
+                  <strong className="text-amber-400 block font-bold">1. Sunlight Arrives (Shortwave)</strong>
+                  Yellow solar photons stream from space. The greenhouse gases (CO₂ & CH₄) are completely transparent to shortwave light!
+                </div>
+
+                <div className={`p-2 rounded-lg border transition ${
+                  storyStep === 2 ? 'bg-orange-950/80 border-orange-500 text-white' : 'bg-slate-900/60 border-slate-800'
+                }`}>
+                  <strong className="text-orange-400 block font-bold">2. Ground Conversion to Thermal IR</strong>
+                  The planetary ground absorbs incoming visible photons, warms up, and converts that energy into longwave Thermal Infrared (red rays)!
+                </div>
+
+                <div className={`p-2 rounded-lg border transition ${
+                  storyStep === 3 ? 'bg-rose-950/80 border-rose-500 text-white' : 'bg-slate-900/60 border-slate-800'
+                }`}>
+                  <strong className="text-rose-400 block font-bold">3. IR Absorption & Downward Back-Radiation</strong>
+                  Outgoing IR photons strike CO₂ and CH₄ molecules. The molecules vibrate and re-radiate ~50% BACK DOWN to the surface, trapping heat like an insulating blanket.
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Real-Time Trapping & Escaping Gauges */}
+          <div className="space-y-2 pt-2 border-t border-slate-800">
+            {/* Trapped & Back-Radiated Bar */}
+            <div className="bg-slate-900/80 p-2.5 rounded-xl border border-rose-950 space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-rose-300 flex items-center gap-1">
+                  <Flame className="w-3.5 h-3.5 text-rose-400" />
+                  Thermal IR Trapped:
+                </span>
+                <span className="font-mono font-bold text-rose-400 text-sm">
+                  {trappedPercent}%
+                </span>
+              </div>
+              <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-amber-500 via-rose-500 to-red-600 transition-all duration-300"
+                  style={{ width: `${trappedPercent}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[9px] text-slate-400">
+                <span>0% (No GHG)</span>
+                <span className="text-amber-300 font-semibold">{trappedBackCount} Collisions Trapped</span>
+                <span>100%</span>
+              </div>
+            </div>
+
+            {/* Escaping to Space Bar */}
+            <div className="bg-slate-900/80 p-2.5 rounded-xl border border-sky-950 space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-sky-300 flex items-center gap-1">
+                  <ArrowUp className="w-3.5 h-3.5 text-sky-400" />
+                  Thermal IR Escaping:
+                </span>
+                <span className="font-mono font-bold text-sky-400 text-sm">
+                  {escapedPercent}%
+                </span>
+              </div>
+              <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-blue-600 to-sky-400 transition-all duration-300"
+                  style={{ width: `${escapedPercent}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[9px] text-slate-400">
+                <span>{escapedCount} Escaped to Space</span>
+                <span className="text-sky-300 font-semibold">{escapedPercent > 50 ? 'Cold Loss' : 'Blanket Retained'}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
